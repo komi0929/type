@@ -15,6 +15,7 @@ export default function Home() {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [currentPreset, setCurrentPreset] = useState<PresetId>(DEFAULT_PRESET);
   const [theme, setTheme] = useState<Theme>("dark");
+  const [isTyping, setIsTyping] = useState(false);
 
   // Initialize theme on mount
   useEffect(() => {
@@ -49,11 +50,16 @@ export default function Home() {
     setTheme(next);
   }, []);
 
+  // Ghost Mode: typing state controls UI visibility
+  const handleTypingStateChange = useCallback((typing: boolean) => {
+    setIsTyping(typing);
+  }, []);
+
   return (
     <main>
-      {/* Theme toggle — subtle, zen-consistent */}
+      {/* Theme toggle — Ghost Mode: disappears when typing */}
       <button
-        className="theme-toggle"
+        className={`theme-toggle ${isTyping ? "ghost-hidden" : ""}`}
         onClick={handleToggleTheme}
         aria-label={
           theme === "dark" ? "ライトモードに切替" : "ダークモードに切替"
@@ -65,7 +71,10 @@ export default function Home() {
         </span>
       </button>
 
-      <ZenCanvas onCommandPalette={openPalette} />
+      <ZenCanvas
+        onCommandPalette={openPalette}
+        onTypingStateChange={handleTypingStateChange}
+      />
       <CommandPalette
         isOpen={isPaletteOpen}
         onClose={closePalette}

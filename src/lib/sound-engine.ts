@@ -1,9 +1,13 @@
 // ============================================================
 // FlowType — Web Audio API Sound Engine
-// Zero-latency, fully synthesized audio with 6 immersive presets
+// Zero-latency, fully synthesized audio with WPM-reactive
+// sound design, accent sounds, and crossfade transitions
 // ============================================================
 
 import { type PresetConfig, type PresetId, getPreset } from "./presets";
+
+// Key types for accent sounds
+export type AccentKey = "punctuation" | "enter" | "backspace" | "normal";
 
 export class SoundEngine {
   private ctx: AudioContext | null = null;
@@ -13,6 +17,11 @@ export class SoundEngine {
   private currentPreset: PresetConfig | null = null;
   private noiseBuffers: Map<string, AudioBuffer> = new Map();
   private isAmbientPlaying = false;
+
+  // Crossfade state
+  private crossfadeGain: GainNode | null = null;
+  private crossfadeNodes: AudioNode[] = [];
+  private isCrossfading = false;
 
   // --- Lifecycle ---
 
@@ -93,15 +102,12 @@ export class SoundEngine {
           break;
         }
         case "crackle": {
-          // Campfire crackle: sparse random pops/clicks layered on brown noise
           let lastCrackle = 0;
           for (let i = 0; i < length; i++) {
             const white = Math.random() * 2 - 1;
             lastCrackle = (lastCrackle + 0.02 * white) / 1.02;
-            // Sparse pops
             const pop =
               Math.random() < 0.001 ? (Math.random() * 2 - 1) * 0.8 : 0;
-            // Crackle texture
             const crackle =
               Math.random() < 0.01 ? (Math.random() * 2 - 1) * 0.3 : 0;
             data[i] = lastCrackle * 2.5 + pop + crackle;
@@ -113,69 +119,171 @@ export class SoundEngine {
     this.noiseBuffers.set(type, buffer);
   }
 
-  // --- Preset Management ---
+  // --- WPM Reactive Scaling ---
+  // All presets now respond to WPM, not just drive-enabled ones.
+  // Low WPM → wide decay, spacious. High WPM → tight, bright.
+
+  private getWPMModifiers(wpm: number): {
+    decayScale: number;
+    pitchScale: number;
+    brightnessScale: number;
+  } {
+    const t = Math.min(wpm / 120, 1); // normalize 0-1
+    return {
+      // Decay shortens as WPM increases (1.3x → 0.7x)
+      decayScale: 1.3 - t * 0.6,
+      // Pitch rises subtly with WPM (0.95x → 1.1x)
+      pitchScale: 0.95 + t * 0.15,
+      // Filter opens up slightly at high WPM (1.0x → 1.3x)
+      brightnessScale: 1.0 + t * 0.3,
+    };
+  }
+
+  // --- Preset Management with Crossfade ---
 
   setPreset(presetId: PresetId): void {
-    const wasPlaying = this.isAmbientPlaying;
-    if (wasPlaying) this.stopAmbient();
-    this.currentPreset = getPreset(presetId);
-    if (wasPlaying) this.startAmbient();
+    const newPreset = getPreset(presetId);
+
+    if (this.isAmbientPlaying && this.ctx && this.masterGain) {
+      // Crossfade: fade out old ambient, start new
+      this.crossfadeAmbient(newPreset);
+    } else {
+      const wasPlaying = this.isAmbientPlaying;
+      if (wasPlaying) this.stopAmbient();
+      this.currentPreset = newPreset;
+      if (wasPlaying) this.startAmbient();
+    }
+
+    this.currentPreset = newPreset;
+  }
+
+  private crossfadeAmbient(newPreset: PresetConfig): void {
+    if (!this.ctx || !this.masterGain || this.isCrossfading) return;
+
+    const now = this.ctx.currentTime;
+    const fadeDuration = 2.5; // seconds
+
+    // Fade out old ambient
+    if (this.ambientGain) {
+      this.isCrossfading = true;
+      this.ambientGain.gain.linearRampToValueAtTime(0.001, now + fadeDuration);
+
+      // Schedule cleanup of old nodes
+      const oldNodes = [...this.ambientNodes];
+      const oldGain = this.ambientGain;
+      setTimeout(
+        () => {
+          oldNodes.forEach((node) => {
+            try {
+              if (node instanceof AudioBufferSourceNode) node.stop();
+              if (node instanceof OscillatorNode) node.stop();
+              node.disconnect();
+            } catch {
+              // Already stopped
+            }
+          });
+          oldGain.disconnect();
+          this.isCrossfading = false;
+        },
+        fadeDuration * 1000 + 100,
+      );
+    }
+
+    // Reset ambient state for new preset
+    this.ambientNodes = [];
+    this.ambientGain = null;
+    this.isAmbientPlaying = false;
+
+    // Start new ambient (will fade in via startAmbient)
+    this.currentPreset = newPreset;
+    if (newPreset.ambient) {
+      this.startAmbientWithFadeIn(fadeDuration);
+    }
+  }
+
+  private startAmbientWithFadeIn(fadeDuration: number): void {
+    if (!this.ctx || !this.masterGain || !this.currentPreset?.ambient) return;
+    if (this.isAmbientPlaying) return;
+
+    const ambientConfig = this.currentPreset.ambient;
+    const targetGain = ambientConfig.gain;
+
+    this.ambientGain = this.ctx.createGain();
+    this.ambientGain.gain.setValueAtTime(0.001, this.ctx.currentTime);
+    this.ambientGain.gain.linearRampToValueAtTime(
+      targetGain,
+      this.ctx.currentTime + fadeDuration,
+    );
+    this.ambientGain.connect(this.masterGain);
+
+    this.buildAmbientGraph(ambientConfig);
+    this.isAmbientPlaying = true;
   }
 
   getCurrentPresetId(): PresetId | null {
     return this.currentPreset?.id ?? null;
   }
 
-  // --- Keystroke Sound ---
+  // --- Keystroke Sound (WPM-Reactive for ALL presets) ---
 
-  playKeystroke(wpm: number = 0): void {
+  playKeystroke(wpm: number = 0, accentKey: AccentKey = "normal"): void {
     if (!this.ctx || !this.masterGain || !this.currentPreset) return;
+
+    // Play accent sounds for special keys
+    if (accentKey !== "normal") {
+      this.playAccentSound(accentKey);
+    }
 
     const preset = this.currentPreset;
     const now = this.ctx.currentTime;
 
-    // Calculate WPM-based pitch scale for Mode C drive system
-    let pitchScale = 1;
+    // WPM-reactive modifiers (applies to ALL presets)
+    const wpmMod = this.getWPMModifiers(wpm);
+
+    // Drive system overrides pitch scale if enabled
+    let pitchScale = wpmMod.pitchScale;
     if (preset.drive?.enabled) {
-      const t = Math.min(wpm / 120, 1); // normalize WPM to 0-1
+      const t = Math.min(wpm / 120, 1);
       pitchScale =
         preset.drive.pitchScaleMin +
         t * (preset.drive.pitchScaleMax - preset.drive.pitchScaleMin);
     }
+
+    // Effective decay with WPM scaling
+    const effectiveDecayMs = preset.keystroke.decayMs * wpmMod.decayScale;
 
     // --- Noise burst component ---
     const noiseGain = this.ctx.createGain();
     noiseGain.gain.setValueAtTime(preset.keystroke.noiseGain, now);
     noiseGain.gain.exponentialRampToValueAtTime(
       0.001,
-      now + preset.keystroke.decayMs / 1000,
+      now + effectiveDecayMs / 1000,
     );
     noiseGain.connect(this.masterGain);
 
     const noiseFilter = this.ctx.createBiquadFilter();
     noiseFilter.type = preset.keystroke.filterType;
-    noiseFilter.frequency.value = preset.keystroke.filterFreq * pitchScale;
+    noiseFilter.frequency.value =
+      preset.keystroke.filterFreq * pitchScale * wpmMod.brightnessScale;
     noiseFilter.Q.value = preset.keystroke.filterQ;
     noiseFilter.connect(noiseGain);
 
-    // Use a short segment of white noise buffer
     const noiseBuffer = this.noiseBuffers.get("white");
     if (noiseBuffer) {
       const noiseSrc = this.ctx.createBufferSource();
       noiseSrc.buffer = noiseBuffer;
-      // Start at random offset for variation
       const offset = Math.random() * (noiseBuffer.duration - 0.2);
       noiseSrc.connect(noiseFilter);
-      noiseSrc.start(now, offset, preset.keystroke.decayMs / 1000 + 0.05);
+      noiseSrc.start(now, offset, effectiveDecayMs / 1000 + 0.05);
     }
 
-    // --- Tonal component (optional resonance) ---
+    // --- Tonal component ---
     if (preset.keystroke.toneGain > 0) {
       const toneGain = this.ctx.createGain();
       toneGain.gain.setValueAtTime(preset.keystroke.toneGain, now);
       toneGain.gain.exponentialRampToValueAtTime(
         0.001,
-        now + preset.keystroke.decayMs / 1000,
+        now + effectiveDecayMs / 1000,
       );
       toneGain.connect(this.masterGain);
 
@@ -187,10 +295,10 @@ export class SoundEngine {
       osc.frequency.value = randomPitch * pitchScale;
       osc.connect(toneGain);
       osc.start(now);
-      osc.stop(now + preset.keystroke.decayMs / 1000 + 0.05);
+      osc.stop(now + effectiveDecayMs / 1000 + 0.05);
     }
 
-    // Update ambient drive if Mode C
+    // Update ambient drive
     if (preset.drive?.enabled && this.ambientGain) {
       const t = Math.min(wpm / 120, 1);
       const targetGain =
@@ -200,25 +308,120 @@ export class SoundEngine {
     }
   }
 
+  // --- Accent Sounds for Punctuation / Enter / Backspace ---
+
+  private playAccentSound(type: AccentKey): void {
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+
+    switch (type) {
+      case "punctuation": {
+        // Soft bell / chime — high resonant tone with long decay
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        gain.connect(this.masterGain);
+
+        const osc = this.ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = 1200 + Math.random() * 400;
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.85);
+
+        // Subtle second harmonic
+        const gain2 = this.ctx.createGain();
+        gain2.gain.setValueAtTime(0.05, now);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+        gain2.connect(this.masterGain);
+
+        const osc2 = this.ctx.createOscillator();
+        osc2.type = "sine";
+        osc2.frequency.value = osc.frequency.value * 2.5;
+        osc2.connect(gain2);
+        osc2.start(now);
+        osc2.stop(now + 1.25);
+        break;
+      }
+      case "enter": {
+        // Deep resonance — space opening up
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+        gain.connect(this.masterGain);
+
+        const osc = this.ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(80, now + 1.5);
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 1.55);
+
+        // Subtle noise wash for spaciousness
+        const noiseGain = this.ctx.createGain();
+        noiseGain.gain.setValueAtTime(0.04, now);
+        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        noiseGain.connect(this.masterGain);
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.value = 500;
+        filter.connect(noiseGain);
+
+        const noiseBuffer = this.noiseBuffers.get("white");
+        if (noiseBuffer) {
+          const src = this.ctx.createBufferSource();
+          src.buffer = noiseBuffer;
+          src.connect(filter);
+          src.start(now, 0, 0.85);
+        }
+        break;
+      }
+      case "backspace": {
+        // Reverse-suck sound — pitch goes up, noise pulls inward
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.08, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+        gain.connect(this.masterGain);
+
+        const osc = this.ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.12);
+        osc.connect(gain);
+        osc.start(now);
+        osc.stop(now + 0.2);
+        break;
+      }
+    }
+  }
+
   // --- Ambient Sound ---
 
   startAmbient(): void {
     if (!this.ctx || !this.masterGain || !this.currentPreset?.ambient) return;
     if (this.isAmbientPlaying) return;
 
-    const preset = this.currentPreset;
-    const ambientConfig = preset.ambient!;
+    const ambientConfig = this.currentPreset.ambient;
 
     this.ambientGain = this.ctx.createGain();
     this.ambientGain.gain.value = ambientConfig.gain;
     this.ambientGain.connect(this.masterGain);
 
+    this.buildAmbientGraph(ambientConfig);
+    this.isAmbientPlaying = true;
+  }
+
+  private buildAmbientGraph(
+    ambientConfig: NonNullable<PresetConfig["ambient"]>,
+  ): void {
+    if (!this.ctx || !this.ambientGain) return;
+
     if (ambientConfig.type === "binaural") {
-      // Binaural beat: two slightly detuned sine waves, panned L/R
       const baseFreq = ambientConfig.binauralBase || 220;
       const beatFreq = ambientConfig.binauralBeat || 40;
 
-      // Left channel
       const oscL = this.ctx.createOscillator();
       oscL.type = "sine";
       oscL.frequency.value = baseFreq;
@@ -229,7 +432,6 @@ export class SoundEngine {
       oscL.start();
       this.ambientNodes.push(oscL, panL);
 
-      // Right channel
       const oscR = this.ctx.createOscillator();
       oscR.type = "sine";
       oscR.frequency.value = baseFreq + beatFreq;
@@ -240,7 +442,6 @@ export class SoundEngine {
       oscR.start();
       this.ambientNodes.push(oscR, panR);
     } else {
-      // Noise-based ambient
       const noiseBuffer = this.noiseBuffers.get(ambientConfig.type);
       if (!noiseBuffer) return;
 
@@ -262,8 +463,6 @@ export class SoundEngine {
       src.start();
       this.ambientNodes.push(src);
     }
-
-    this.isAmbientPlaying = true;
   }
 
   stopAmbient(): void {
@@ -282,7 +481,7 @@ export class SoundEngine {
     this.isAmbientPlaying = false;
   }
 
-  // Fade ambient to silence when typing pauses (Mode C)
+  // Fade ambient to silence when typing pauses
   fadeAmbientToSilence(): void {
     if (!this.ctx || !this.ambientGain) return;
     this.ambientGain.gain.linearRampToValueAtTime(

@@ -452,3 +452,59 @@ body {
     line-height: 1.8;
   }
 }
+
+/* ============================================================
+   Pulse Indicator — Rhythm visualization
+   A subtle glow at screen edges that pulses with typing rhythm
+   ============================================================ */
+
+.pulse-indicator {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: calc(var(--pulse-intensity, 0) * 0.6);
+  transition: opacity 0.8s ease;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 60%,
+    var(--color-accent) 150%
+  );
+  mix-blend-mode: screen;
+  animation: pulse-breathe 2s ease-in-out infinite;
+}
+
+:root[data-theme="light"] .pulse-indicator {
+  mix-blend-mode: multiply;
+  opacity: calc(var(--pulse-intensity, 0) * 0.15) !important;
+}
+
+@keyframes pulse-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.01);
+  }
+}
+
+/* ============================================================
+   Ghost Mode — UI disappears when typing
+   ============================================================ */
+
+.ghost-hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition:
+    opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1),
+    pointer-events 0s 0.8s !important;
+}
+
+/* When not ghost-hidden, restore with gentle fade */
+.theme-toggle:not(.ghost-hidden) {
+  transition:
+    opacity 1.2s cubic-bezier(0.4, 0, 0.2, 1),
+    background 0.3s ease,
+    transform 0.3s ease !important;
+}
