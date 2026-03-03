@@ -1,7 +1,8 @@
 // ============================================================
 // FlowType — Web Audio API Sound Engine
 // Zero-latency, fully synthesized audio with WPM-reactive
-// sound design, accent sounds, and crossfade transitions
+// sound design, 1/f pitch walk, stochastic resonance,
+// accent sounds, and crossfade transitions
 // ============================================================
 
 import { type PresetConfig, type PresetId, getPreset } from "./presets";
@@ -17,6 +18,9 @@ export class SoundEngine {
   private currentPreset: PresetConfig | null = null;
   private noiseBuffers: Map<string, AudioBuffer> = new Map();
   private isAmbientPlaying = false;
+
+  // 1/f pitch walk state — each keystroke's pitch correlates with the previous
+  private lastPitchWalk = 0;
 
   // Crossfade state
   private crossfadeGain: GainNode | null = null;
@@ -288,14 +292,45 @@ export class SoundEngine {
       toneGain.connect(this.masterGain);
 
       const osc = this.ctx.createOscillator();
-      const randomPitch =
-        preset.keystroke.pitchBase +
-        (Math.random() * 2 - 1) * preset.keystroke.pitchRandomRange;
+      // 1/f pitch walk: pitch correlates with previous via Brownian walk
+      // instead of pure random (white noise = 0/f), creating organic melody
+      const walkStep = (Math.random() * 2 - 1) * 0.3;
+      this.lastPitchWalk = this.lastPitchWalk * 0.7 + walkStep * 0.3;
+      const walkOffset = this.lastPitchWalk * preset.keystroke.pitchRandomRange;
+      const pitchValue = preset.keystroke.pitchBase + walkOffset;
       osc.type = preset.keystroke.toneType;
-      osc.frequency.value = randomPitch * pitchScale;
+      osc.frequency.value = pitchValue * pitchScale;
       osc.connect(toneGain);
       osc.start(now);
       osc.stop(now + effectiveDecayMs / 1000 + 0.05);
+
+      // Stochastic resonance layer: sub-threshold high-freq noise
+      // enhances perception of the tonal signal (NIH research)
+      const srGain = this.ctx.createGain();
+      srGain.gain.setValueAtTime(0.015, now);
+      srGain.gain.exponentialRampToValueAtTime(
+        0.001,
+        now + (effectiveDecayMs / 1000) * 0.5,
+      );
+      srGain.connect(this.masterGain);
+
+      const srFilter = this.ctx.createBiquadFilter();
+      srFilter.type = "highpass";
+      srFilter.frequency.value = 6000;
+      srFilter.Q.value = 0.5;
+      srFilter.connect(srGain);
+
+      const srBuffer = this.noiseBuffers.get("white");
+      if (srBuffer) {
+        const srSrc = this.ctx.createBufferSource();
+        srSrc.buffer = srBuffer;
+        srSrc.connect(srFilter);
+        srSrc.start(
+          now,
+          Math.random() * (srBuffer.duration - 0.1),
+          (effectiveDecayMs / 1000) * 0.5 + 0.02,
+        );
+      }
     }
 
     // Update ambient drive

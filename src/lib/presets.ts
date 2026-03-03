@@ -92,7 +92,7 @@ export const PRESETS: PresetConfig[] = [
   {
     id: "zen-drops",
     name: "Zen Drops",
-    description: "水滴の響きとバイノーラルビート",
+    description: "水滴の響き — α波(10Hz)で創造性を引き出す",
     emoji: "💧",
     keystroke: {
       filterType: "bandpass",
@@ -110,13 +110,13 @@ export const PRESETS: PresetConfig[] = [
       type: "binaural",
       gain: 0.06,
       binauralBase: 220,
-      binauralBeat: 40,
+      binauralBeat: 10,
     },
   },
   {
     id: "mode-c",
     name: "Mode C",
-    description: "WPM連動コンボ・ドライブ",
+    description: "γ波(40Hz)集中 — WPM連動コンボ・ドライブ",
     emoji: "🎯",
     keystroke: {
       filterType: "bandpass",
@@ -250,7 +250,7 @@ export const PRESETS: PresetConfig[] = [
     // バイノーラルビートでシータ波(4Hz)を誘導し深い集中状態へ。
     id: "deep-ocean",
     name: "Deep Ocean",
-    description: "深海の静寂 — シータ波で深い集中へ",
+    description: "深海の静寂 — θ波(4Hz)で深いリラックスへ",
     emoji: "🫧",
     keystroke: {
       filterType: "lowpass",
@@ -277,7 +277,7 @@ export const PRESETS: PresetConfig[] = [
     // 高い倍音のきらめきと、ゆっくり揺れるバイノーラルビート。
     id: "aurora",
     name: "Aurora",
-    description: "オーロラの揺らぎ — WPM連動で光が増す",
+    description: "オーロラの揺らぎ — α波(10Hz)+WPM連動",
     emoji: "🌌",
     keystroke: {
       filterType: "highpass",

@@ -23,12 +23,15 @@ export default function ZenCanvas({
   const editorRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef(getSoundEngine());
   const [isIdle, setIsIdle] = useState(false);
+  const [isDeepIdle, setIsDeepIdle] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
   const [currentPreset, setCurrentPreset] = useState<PresetId>(DEFAULT_PRESET);
   const [focusModeEnabled] = useState(true);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deepIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keystrokeTimesRef = useRef<number[]>([]);
   const charCountRef = useRef(0);
+  const [charCount, setCharCount] = useState(0);
   const [currentWpm, setCurrentWpm] = useState(0);
 
   // Pulse Indicator: track rhythm stability
@@ -51,7 +54,6 @@ export default function ZenCanvas({
     const intervals = intervalHistoryRef.current;
     if (intervals.length < 4) return 0;
 
-    // Keep only last 20 intervals
     if (intervals.length > 20) {
       intervalHistoryRef.current = intervals.slice(-20);
     }
@@ -60,12 +62,10 @@ export default function ZenCanvas({
     const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
     if (mean === 0) return 0;
 
-    // Calculate coefficient of variation (lower = more stable)
     const variance =
       recent.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / recent.length;
     const cv = Math.sqrt(variance) / mean;
 
-    // Convert to 0-1 intensity (cv < 0.15 = very stable = 1.0)
     return Math.max(0, Math.min(1, 1 - cv / 0.5));
   }, []);
 
@@ -83,6 +83,7 @@ export default function ZenCanvas({
         if (editorRef.current && content) {
           editorRef.current.innerText = content;
           charCountRef.current = content.length;
+          setCharCount(content.length);
         }
       } catch {
         // First time — no saved content
@@ -127,19 +128,16 @@ export default function ZenCanvas({
     const editor = editorRef.current;
     const children = editor.childNodes;
 
-    // Get selection to find current paragraph
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
     const range = selection.getRangeAt(0);
     let currentNode: Node | null = range.startContainer;
 
-    // Walk up to find the direct child of editor
     while (currentNode && currentNode.parentNode !== editor) {
       currentNode = currentNode.parentNode;
     }
 
-    // Apply focus styling
     children.forEach((child) => {
       if (child instanceof HTMLElement) {
         if (child === currentNode) {
@@ -165,6 +163,46 @@ export default function ZenCanvas({
       });
     }
   }, [isIdle]);
+
+  // --- Typewriter Scroll: keep cursor at screen center ---
+  const typewriterScroll = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.top === 0 && rect.left === 0) return;
+
+    const viewportCenter = window.innerHeight / 2;
+    const offset = rect.top - viewportCenter;
+
+    if (Math.abs(offset) > 50) {
+      window.scrollBy({ top: offset, behavior: "smooth" });
+    }
+  }, []);
+
+  // --- Markdown Live Preview ---
+  const applyMarkdownFormatting = useCallback(() => {
+    if (!editorRef.current) return;
+    const editor = editorRef.current;
+    const children = Array.from(editor.childNodes);
+
+    children.forEach((child) => {
+      if (!(child instanceof HTMLElement)) return;
+      const text = child.textContent || "";
+
+      // Heading detection: # ## ###
+      if (text.startsWith("### ")) {
+        child.className = "md-h3";
+      } else if (text.startsWith("## ")) {
+        child.className = "md-h2";
+      } else if (text.startsWith("# ")) {
+        child.className = "md-h1";
+      } else {
+        child.className = "";
+      }
+    });
+  }, []);
 
   // --- Detect accent key type ---
   const getAccentKey = useCallback((key: string): AccentKey => {
@@ -226,7 +264,6 @@ export default function ZenCanvas({
       if (lastKeystrokeTimeRef.current > 0) {
         const interval = now - lastKeystrokeTimeRef.current;
         if (interval < 2000) {
-          // Only track reasonable intervals
           intervalHistoryRef.current.push(interval);
         }
       }
@@ -247,14 +284,21 @@ export default function ZenCanvas({
       const stability = calculateRhythmStability();
       setPulseIntensity(stability);
 
-      // Update focus paragraph
-      requestAnimationFrame(updateFocusParagraph);
+      // Update focus paragraph + typewriter scroll + markdown
+      requestAnimationFrame(() => {
+        updateFocusParagraph();
+        typewriterScroll();
+        applyMarkdownFormatting();
+      });
 
-      // Reset idle state
+      // Reset idle & deep idle states
       setIsIdle(false);
+      setIsDeepIdle(false);
       onTypingStateChange?.(true);
 
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (deepIdleTimerRef.current) clearTimeout(deepIdleTimerRef.current);
+
       idleTimerRef.current = setTimeout(() => {
         setIsIdle(true);
         onTypingStateChange?.(false);
@@ -262,6 +306,11 @@ export default function ZenCanvas({
         setPulseIntensity(0);
         intervalHistoryRef.current = [];
       }, 3000);
+
+      // Deep idle: 30s → text fades (Transient Hypofrontality support)
+      deepIdleTimerRef.current = setTimeout(() => {
+        setIsDeepIdle(true);
+      }, 30000);
     },
     [
       onCommandPalette,
@@ -269,15 +318,18 @@ export default function ZenCanvas({
       calculateRhythmStability,
       getAccentKey,
       updateFocusParagraph,
+      typewriterScroll,
+      applyMarkdownFormatting,
       onTypingStateChange,
     ],
   );
 
-  // --- Handle input for auto-save ---
+  // --- Handle input for auto-save + char count ---
   const handleInput = useCallback(() => {
     if (!editorRef.current) return;
     const content = editorRef.current.innerText;
     charCountRef.current = content.length;
+    setCharCount(content.length);
     debouncedSave(content);
   }, []);
 
@@ -286,7 +338,7 @@ export default function ZenCanvas({
 
   return (
     <div
-      className={`zen-canvas ${isIdle ? "zen-idle" : "zen-active"}`}
+      className={`zen-canvas ${isIdle ? "zen-idle" : "zen-active"} ${isDeepIdle ? "zen-deep-idle" : ""}`}
       onClick={() => editorRef.current?.focus()}
     >
       {/* Pulse Indicator — screen edge glow based on typing rhythm */}
@@ -321,6 +373,11 @@ export default function ZenCanvas({
         }
         data-placeholder="ここに書き始める..."
       />
+
+      {/* Character counter — minimal, Ghost Mode compatible */}
+      <div className={`char-counter ${isIdle ? "" : "ghost-hidden"}`}>
+        {charCount.toLocaleString()}文字
+      </div>
     </div>
   );
 }
