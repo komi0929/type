@@ -13,7 +13,39 @@
   --color-surface: rgba(255, 255, 255, 0.04);
   --color-surface-hover: rgba(255, 255, 255, 0.08);
   --color-border: rgba(255, 255, 255, 0.06);
+  --color-palette-bg: rgba(30, 30, 34, 0.92);
+  --color-palette-overlay: rgba(0, 0, 0, 0.5);
+  --color-palette-shadow: rgba(0, 0, 0, 0.5);
+  --color-palette-inset: rgba(255, 255, 255, 0.05);
+  --color-kbd-bg: rgba(255, 255, 255, 0.06);
+  --color-kbd-border: rgba(255, 255, 255, 0.1);
+  --color-selection: rgba(196, 181, 160, 0.2);
   --font-serif: var(--font-noto-serif-jp), "Georgia", serif;
+}
+
+/* === Light Mode === */
+:root[data-theme="light"] {
+  --color-background: #faf8f5 !important;
+  --color-foreground: #2c2a27 !important;
+  --color-foreground-dim: #9e9a94 !important;
+  --color-accent: #8b7355 !important;
+  --color-surface: rgba(0, 0, 0, 0.03) !important;
+  --color-surface-hover: rgba(0, 0, 0, 0.06) !important;
+  --color-border: rgba(0, 0, 0, 0.08) !important;
+  --color-palette-bg: rgba(255, 255, 255, 0.95) !important;
+  --color-palette-overlay: rgba(0, 0, 0, 0.2) !important;
+  --color-palette-shadow: rgba(0, 0, 0, 0.15) !important;
+  --color-palette-inset: rgba(255, 255, 255, 0.8) !important;
+  --color-kbd-bg: rgba(0, 0, 0, 0.05) !important;
+  --color-kbd-border: rgba(0, 0, 0, 0.12) !important;
+  --color-selection: rgba(139, 115, 85, 0.15) !important;
+}
+
+/* === Smooth theme transition === */
+html {
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease;
 }
 
 /* === Base Reset === */
@@ -32,6 +64,48 @@ body {
   font-family: var(--font-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* === Theme Toggle Button === */
+.theme-toggle {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  color: var(--color-foreground-dim);
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+  opacity: 0.4;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.theme-toggle:hover {
+  opacity: 1;
+  background: var(--color-surface-hover);
+  transform: scale(1.08);
+}
+
+.theme-toggle:active {
+  transform: scale(0.95);
+}
+
+.theme-toggle-icon {
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1;
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+  transform: rotate(30deg);
 }
 
 /* === Zen Canvas === */
@@ -74,6 +148,7 @@ body {
   overflow-wrap: break-word;
   caret-color: var(--color-accent);
   scrollbar-width: none;
+  transition: color 0.3s ease;
 }
 
 .zen-editor::-webkit-scrollbar {
@@ -97,7 +172,7 @@ body {
 
 @supports (caret-color: var(--color-accent)) {
   .zen-editor::selection {
-    background: rgba(196, 181, 160, 0.2);
+    background: var(--color-selection);
   }
 }
 
@@ -146,6 +221,7 @@ body {
   justify-content: center;
   background: var(--color-background);
   z-index: 100;
+  transition: background-color 0.4s ease;
 }
 
 .zen-startup-text {
@@ -176,7 +252,7 @@ body {
   align-items: flex-start;
   justify-content: center;
   padding-top: 20vh;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-palette-overlay);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 1000;
@@ -195,13 +271,13 @@ body {
 .palette-container {
   width: 100%;
   max-width: 480px;
-  background: rgba(30, 30, 34, 0.92);
+  background: var(--color-palette-bg);
   border: 1px solid var(--color-border);
   border-radius: 16px;
   overflow: hidden;
   box-shadow:
-    0 24px 80px rgba(0, 0, 0, 0.5),
-    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    0 24px 80px var(--color-palette-shadow),
+    0 0 0 1px var(--color-palette-inset) inset;
   animation: palette-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   outline: none;
 }
@@ -239,8 +315,8 @@ body {
 .palette-kbd {
   font-size: 0.65rem;
   padding: 0.15rem 0.4rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-kbd-bg);
+  border: 1px solid var(--color-kbd-border);
   border-radius: 4px;
   color: var(--color-foreground-dim);
   font-family: monospace;
@@ -250,6 +326,29 @@ body {
   padding: 0.5rem;
   max-height: 360px;
   overflow-y: auto;
+}
+
+/* === Palette Section Divider === */
+.palette-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.palette-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.palette-divider-label {
+  font-size: 0.65rem;
+  color: var(--color-foreground-dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .palette-item {
@@ -314,8 +413,8 @@ body {
 .palette-footer kbd {
   font-size: 0.6rem;
   padding: 0.1rem 0.35rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-kbd-bg);
+  border: 1px solid var(--color-kbd-border);
   border-radius: 3px;
   font-family: monospace;
   margin: 0 0.15rem;
@@ -336,6 +435,14 @@ body {
   .palette-container {
     max-width: calc(100% - 2rem);
     margin: 0 1rem;
+  }
+
+  .theme-toggle {
+    top: 0.75rem;
+    right: 0.75rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    font-size: 1rem;
   }
 }
 

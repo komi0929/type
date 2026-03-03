@@ -8,18 +8,27 @@ import {
   type KeyboardEvent,
 } from "react";
 import { PRESETS, type PresetId } from "@/lib/presets";
+import type { Theme } from "@/lib/theme";
 
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   currentPreset: PresetId;
+  currentTheme: Theme;
+  onToggleTheme: () => void;
 }
 
 export default function CommandPalette({
   isOpen,
   onClose,
   currentPreset,
+  currentTheme,
+  onToggleTheme,
 }: CommandPaletteProps) {
+  // Total items = presets + 1 (theme toggle)
+  const totalItems = PRESETS.length + 1;
+  const themeItemIndex = PRESETS.length; // Last item
+
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -37,17 +46,19 @@ export default function CommandPalette({
       switch (e.key) {
         case "ArrowDown":
           e.preventDefault();
-          setSelectedIndex((prev) => (prev + 1) % PRESETS.length);
+          setSelectedIndex((prev) => (prev + 1) % totalItems);
           break;
         case "ArrowUp":
           e.preventDefault();
-          setSelectedIndex(
-            (prev) => (prev - 1 + PRESETS.length) % PRESETS.length,
-          );
+          setSelectedIndex((prev) => (prev - 1 + totalItems) % totalItems);
           break;
         case "Enter":
           e.preventDefault();
-          selectPreset(PRESETS[selectedIndex].id);
+          if (selectedIndex === themeItemIndex) {
+            onToggleTheme();
+          } else {
+            selectPreset(PRESETS[selectedIndex].id);
+          }
           break;
         case "Escape":
           e.preventDefault();
@@ -55,7 +66,7 @@ export default function CommandPalette({
           break;
       }
     },
-    [selectedIndex, onClose], // eslint-disable-line react-hooks/exhaustive-deps
+    [selectedIndex, onClose, totalItems, themeItemIndex, onToggleTheme], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   const selectPreset = (id: PresetId) => {
@@ -86,12 +97,13 @@ export default function CommandPalette({
         ref={(el) => el?.focus()}
       >
         <div className="palette-header">
-          <span className="palette-icon">🎵</span>
-          <span className="palette-title">サウンドプリセット</span>
+          <span className="palette-icon">⌘</span>
+          <span className="palette-title">コマンドパレット</span>
           <kbd className="palette-kbd">ESC</kbd>
         </div>
 
         <div className="palette-list" ref={listRef}>
+          {/* Sound Presets Section */}
           {PRESETS.map((preset, index) => (
             <div
               key={preset.id}
@@ -111,6 +123,40 @@ export default function CommandPalette({
               )}
             </div>
           ))}
+
+          {/* Divider */}
+          <div className="palette-divider">
+            <span className="palette-divider-line" />
+            <span className="palette-divider-label">表示</span>
+            <span className="palette-divider-line" />
+          </div>
+
+          {/* Theme Toggle */}
+          <div
+            className={`palette-item ${
+              selectedIndex === themeItemIndex ? "palette-item-selected" : ""
+            }`}
+            onClick={() => {
+              onToggleTheme();
+            }}
+            onMouseEnter={() => setSelectedIndex(themeItemIndex)}
+          >
+            <span className="palette-item-emoji">
+              {currentTheme === "dark" ? "☀️" : "🌙"}
+            </span>
+            <div className="palette-item-info">
+              <span className="palette-item-name">
+                {currentTheme === "dark"
+                  ? "ライトモードに切替"
+                  : "ダークモードに切替"}
+              </span>
+              <span className="palette-item-desc">
+                {currentTheme === "dark"
+                  ? "明るい紙のような背景"
+                  : "暗い没入的な背景"}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div className="palette-footer">
