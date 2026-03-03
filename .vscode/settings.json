@@ -1,0 +1,25 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  "editor.minimap.enabled": false,
+  "editor.bracketPairColorization.enabled": true,
+  "editor.smoothScrolling": true,
+  "editor.cursorBlinking": "smooth",
+  "editor.cursorSmoothCaretAnimation": "on",
+  "editor.fontSize": 14,
+  "editor.tabSize": 2,
+  "editor.wordWrap": "on",
+  "files.autoSave": "onFocusChange",
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.next": true
+  },
+  "tailwindCSS.includeLanguages": {
+    "typescript": "javascript",
+    "typescriptreact": "javascript"
+  },
+  "tailwindCSS.emmetCompletions": true
+}

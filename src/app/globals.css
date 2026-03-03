@@ -1,0 +1,347 @@
+@import "tailwindcss";
+
+/* ============================================================
+   FlowType — Zen Design System
+   A writing interface stripped to its essence
+   ============================================================ */
+
+@theme inline {
+  --color-background: #0d0d0f;
+  --color-foreground: #e8e6e3;
+  --color-foreground-dim: #6b6966;
+  --color-accent: #c4b5a0;
+  --color-surface: rgba(255, 255, 255, 0.04);
+  --color-surface-hover: rgba(255, 255, 255, 0.08);
+  --color-border: rgba(255, 255, 255, 0.06);
+  --font-serif: var(--font-noto-serif-jp), "Georgia", serif;
+}
+
+/* === Base Reset === */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-serif);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* === Zen Canvas === */
+.zen-canvas {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: text;
+}
+
+.zen-canvas.zen-idle {
+  opacity: 0.6;
+}
+
+.zen-canvas.zen-active {
+  opacity: 1;
+}
+
+/* === Zen Editor === */
+.zen-editor {
+  width: 100%;
+  max-width: 680px;
+  min-height: 60vh;
+  max-height: 80vh;
+  overflow-y: auto;
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
+  line-height: 2;
+  letter-spacing: 0.02em;
+  color: var(--color-foreground);
+  outline: none;
+  border: none;
+  background: transparent;
+  padding: 2rem 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  caret-color: var(--color-accent);
+  scrollbar-width: none;
+}
+
+.zen-editor::-webkit-scrollbar {
+  display: none;
+}
+
+/* Placeholder */
+.zen-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--color-foreground-dim);
+  opacity: 0.4;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* === Caret Glow (pulsing heartbeat) === */
+.zen-editor {
+  --glow-strength: calc(2px + var(--caret-intensity, 0) * 8px);
+  --glow-opacity: calc(0.3 + var(--caret-intensity, 0) * 0.7);
+}
+
+@supports (caret-color: var(--color-accent)) {
+  .zen-editor::selection {
+    background: rgba(196, 181, 160, 0.2);
+  }
+}
+
+/* === Ink Absorption Animation === */
+@keyframes ink-absorb {
+  0% {
+    opacity: 0.3;
+    filter: blur(0.5px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px);
+  }
+}
+
+.zen-editor {
+  animation: none;
+}
+
+/* Apply ink effect to newly typed characters via CSS */
+.zen-canvas.zen-active .zen-editor {
+  transition: color 0.15s ease-out;
+}
+
+/* === Breathing Whitespace (idle state) === */
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.zen-canvas.zen-idle .zen-editor {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+/* === Startup Overlay === */
+.zen-startup {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background);
+  z-index: 100;
+}
+
+.zen-startup-text {
+  font-size: 0.875rem;
+  color: var(--color-foreground-dim);
+  letter-spacing: 0.1em;
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* ============================================================
+   Command Palette — Glassmorphism Overlay
+   ============================================================ */
+
+.palette-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 1000;
+  animation: palette-fade-in 0.15s ease-out;
+}
+
+@keyframes palette-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.palette-container {
+  width: 100%;
+  max-width: 480px;
+  background: rgba(30, 30, 34, 0.92);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  animation: palette-slide-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  outline: none;
+}
+
+@keyframes palette-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.palette-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.palette-icon {
+  font-size: 1rem;
+}
+
+.palette-title {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--color-foreground-dim);
+  letter-spacing: 0.04em;
+}
+
+.palette-kbd {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--color-foreground-dim);
+  font-family: monospace;
+}
+
+.palette-list {
+  padding: 0.5rem;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.palette-item:hover,
+.palette-item-selected {
+  background: var(--color-surface-hover);
+}
+
+.palette-item-active {
+  border-left: 2px solid var(--color-accent);
+}
+
+.palette-item-emoji {
+  font-size: 1.25rem;
+  width: 2rem;
+  text-align: center;
+}
+
+.palette-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.palette-item-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--color-foreground);
+  font-family: "Inter", sans-serif;
+}
+
+.palette-item-desc {
+  font-size: 0.75rem;
+  color: var(--color-foreground-dim);
+}
+
+.palette-item-check {
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.palette-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.7rem;
+  color: var(--color-foreground-dim);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.palette-footer kbd {
+  font-size: 0.6rem;
+  padding: 0.1rem 0.35rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  font-family: monospace;
+  margin: 0 0.15rem;
+}
+
+/* === Responsive === */
+@media (max-width: 768px) {
+  .zen-editor {
+    font-size: 1.1rem;
+    line-height: 1.85;
+    padding: 1rem 0;
+  }
+
+  .zen-canvas {
+    padding: 1.5rem;
+  }
+
+  .palette-container {
+    max-width: calc(100% - 2rem);
+    margin: 0 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .zen-editor {
+    font-size: 1rem;
+    line-height: 1.8;
+  }
+}
