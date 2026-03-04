@@ -315,11 +315,9 @@ export default function ZenCanvas({
         if (child === currentNode) {
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
-          child.style.transform = "";
         } else {
-          child.style.opacity = "0.7";
-          child.style.filter = "blur(0.3px)";
-          child.style.transform = "";
+          child.style.opacity = "0.55";
+          child.style.filter = "blur(0.5px)";
         }
       }
     });
@@ -333,7 +331,6 @@ export default function ZenCanvas({
         if (child instanceof HTMLElement) {
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
-          child.style.transform = "";
         }
       });
     }

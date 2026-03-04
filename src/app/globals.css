@@ -24,6 +24,8 @@
   /* #5 Organic Selection — moonlight, not cold blue */
   --color-selection: rgba(255, 252, 240, 0.1);
   --font-serif: var(--font-noto-serif-jp), "Georgia", serif;
+  /* Quality: Grain overlay intensity */
+  --grain-opacity: 0.03;
 }
 
 /* === Light Mode — warm paper tones === */
@@ -35,20 +37,21 @@
   --color-surface: rgba(0, 0, 0, 0.03) !important;
   --color-surface-hover: rgba(0, 0, 0, 0.06) !important;
   --color-border: rgba(0, 0, 0, 0.08) !important;
-  --color-palette-bg: rgba(252, 250, 245, 0.96) !important;
+  --color-palette-bg: rgba(252, 250, 245, 0.92) !important;
   --color-palette-overlay: rgba(0, 0, 0, 0.15) !important;
   --color-palette-shadow: rgba(0, 0, 0, 0.12) !important;
   --color-palette-inset: rgba(255, 255, 255, 0.8) !important;
   --color-kbd-bg: rgba(0, 0, 0, 0.05) !important;
   --color-kbd-border: rgba(0, 0, 0, 0.12) !important;
   --color-selection: rgba(120, 100, 70, 0.12) !important;
+  --grain-opacity: 0.04 !important;
 }
 
 /* === Smooth theme transition === */
 html {
   transition:
-    background-color 0.4s ease,
-    color 0.4s ease;
+    background-color 0.6s ease,
+    color 0.6s ease;
 }
 
 /* === Base Reset === */
@@ -69,6 +72,20 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* === Paper Grain Texture — adds tactile depth to flat backgrounds === */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--grain-opacity, 0.03);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  mix-blend-mode: overlay;
+}
+
 /* === Theme Toggle Button === */
 .theme-toggle {
   position: fixed;
@@ -86,8 +103,8 @@ body {
   color: var(--color-foreground-dim);
   cursor: pointer;
   font-size: 1.1rem;
-  transition: all 0.3s ease;
-  opacity: 0.4;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.3;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
@@ -197,15 +214,17 @@ body {
 /* ============================================================
    #7 Dynamic Ink — freshly typed text has subtle glow
    Characters "dry" over time: glossy → matte
+   Enhanced: richer glow for true ink-on-paper feel
    ============================================================ */
 
 .ink-fresh {
   text-shadow:
-    0 0 4px rgba(200, 182, 154, 0.25),
-    0 0 1px rgba(255, 255, 255, 0.15);
+    0 0 6px rgba(200, 182, 154, 0.3),
+    0 0 2px rgba(255, 255, 255, 0.12),
+    0 1px 0 rgba(200, 182, 154, 0.08);
   transition:
-    text-shadow 2s ease-out,
-    opacity 2s ease-out;
+    text-shadow 2.5s ease-out,
+    opacity 2.5s ease-out;
 }
 
 .ink-drying {
@@ -215,19 +234,20 @@ body {
 
 :root[data-theme="light"] .ink-fresh {
   text-shadow:
-    0 0 3px rgba(139, 115, 85, 0.15),
-    0 0 1px rgba(0, 0, 0, 0.08);
+    0 0 4px rgba(139, 115, 85, 0.2),
+    0 0 1px rgba(0, 0, 0, 0.06),
+    0 1px 0 rgba(139, 115, 85, 0.04);
 }
 
 /* ============================================================
    #8 Depth of Field — current line "near", others "far"
-   Smooth transitions for blur + scale + opacity
+   Enhanced: deeper blur for more pronounced cinematic focus
    ============================================================ */
 
 .zen-editor > * {
   transition:
-    opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-    filter 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ============================================================
@@ -241,7 +261,13 @@ body {
   left: 0;
   width: 2px;
   height: 24px;
-  background: var(--color-accent);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--color-accent) 15%,
+    var(--color-accent) 85%,
+    transparent 100%
+  );
   border-radius: 1px;
   pointer-events: none;
   z-index: 20;
@@ -250,7 +276,9 @@ body {
     opacity 0.15s ease,
     height 0.12s cubic-bezier(0.25, 0.1, 0.25, 1);
   will-change: transform;
-  box-shadow: 0 0 6px rgba(200, 182, 154, 0.3);
+  box-shadow:
+    0 0 8px rgba(200, 182, 154, 0.4),
+    0 0 3px rgba(200, 182, 154, 0.2);
 }
 
 /* Caret blink animation when idle */
@@ -274,7 +302,16 @@ body {
 }
 
 :root[data-theme="light"] .smooth-caret {
-  box-shadow: 0 0 4px rgba(139, 115, 85, 0.25);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    var(--color-accent) 15%,
+    var(--color-accent) 85%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 6px rgba(139, 115, 85, 0.3),
+    0 0 2px rgba(139, 115, 85, 0.15);
 }
 
 /* === Ink Absorption Animation === */
@@ -298,19 +335,21 @@ body {
   transition: color 0.15s ease-out;
 }
 
-/* === Breathing Whitespace (idle state) === */
+/* === Breathing Whitespace (idle state) — enhanced organic rhythm === */
 @keyframes breathe {
   0%,
   100% {
-    opacity: 0.85;
+    opacity: 0.82;
+    transform: scale(1);
   }
   50% {
-    opacity: 0.95;
+    opacity: 0.94;
+    transform: scale(1.001);
   }
 }
 
 .zen-canvas.zen-idle .zen-editor {
-  animation: breathe 4s ease-in-out infinite;
+  animation: breathe 5s ease-in-out infinite;
 }
 
 /* === Startup Overlay === */
@@ -564,15 +603,15 @@ body {
   inset: 0;
   pointer-events: none;
   z-index: 1;
-  opacity: calc(var(--pulse-intensity, 0) * 0.6);
-  transition: opacity 0.8s ease;
+  opacity: calc(var(--pulse-intensity, 0) * 0.8);
+  transition: opacity 1s ease;
   background: radial-gradient(
     ellipse at 50% 50%,
-    transparent 60%,
-    var(--color-accent) 150%
+    transparent 55%,
+    var(--color-accent) 140%
   );
   mix-blend-mode: screen;
-  animation: pulse-breathe 2s ease-in-out infinite;
+  animation: pulse-breathe 2.5s ease-in-out infinite;
 }
 
 :root[data-theme="light"] .pulse-indicator {
@@ -664,16 +703,22 @@ body {
 /* ============================================================
    Deep Idle — 30s text fade (Transient Hypofrontality)
    Supports flow state by reducing self-awareness
+   Enhanced: deeper fade with warmer color shift
    ============================================================ */
 
 .zen-deep-idle .zen-editor {
-  opacity: 0.45 !important;
-  transition: opacity 5s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  opacity: 0.35 !important;
+  filter: saturate(0.85) !important;
+  transition:
+    opacity 6s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 6s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
 /* When exiting deep idle, snap back quickly */
 .zen-canvas:not(.zen-deep-idle) .zen-editor {
-  transition: opacity 0.3s ease !important;
+  transition:
+    opacity 0.4s ease,
+    filter 0.4s ease !important;
 }
 
 /* ============================================================
