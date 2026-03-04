@@ -105,9 +105,10 @@ export default function ZenCanvas({
     setTimeout(() => editorRef.current?.focus(), 100);
 
     const engine = engineRef.current;
+    const currentInkTimers = inkTimersRef.current;
     return () => {
       engine.dispose();
-      inkTimersRef.current.forEach(clearTimeout);
+      currentInkTimers.forEach(clearTimeout);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -131,6 +132,10 @@ export default function ZenCanvas({
   }, []);
 
   // --- #7 IME Composition handlers ---
+  // Store callback refs to avoid 'accessed before declared' issues
+  const updateCaretPositionRef = useRef<() => void>(() => {});
+  const applyDynamicInkRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -150,8 +155,8 @@ export default function ZenCanvas({
         caretRef.current.classList.remove("caret-composing");
       }
       requestAnimationFrame(() => {
-        updateCaretPosition();
-        applyDynamicInk();
+        updateCaretPositionRef.current();
+        applyDynamicInkRef.current();
       });
     };
 
@@ -162,7 +167,7 @@ export default function ZenCanvas({
       editor.removeEventListener("compositionstart", handleCompositionStart);
       editor.removeEventListener("compositionend", handleCompositionEnd);
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // --- #11 Smooth Caret: update position ---
   const updateCaretPosition = useCallback(() => {
@@ -189,14 +194,71 @@ export default function ZenCanvas({
 
     const rect = range.getBoundingClientRect();
 
-    // If rect is zero (e.g., empty editor or no valid position)
+    // If rect is zero (e.g., empty line after Enter, empty editor)
     if (
       rect.width === 0 &&
       rect.height === 0 &&
       rect.top === 0 &&
       rect.left === 0
     ) {
-      // Fallback: position at editor's padding-top area
+      // Try to find the container element to get its position
+      let containerNode: Node | null = range.startContainer;
+
+      // If we're in a text node, go up to the element
+      if (containerNode.nodeType === Node.TEXT_NODE) {
+        containerNode = containerNode.parentNode;
+      }
+
+      // Walk up to find a block-level child of the editor
+      while (
+        containerNode &&
+        containerNode !== editorRef.current &&
+        containerNode.parentNode !== editorRef.current
+      ) {
+        containerNode = containerNode.parentNode;
+      }
+
+      // If we found a valid container element, use it
+      if (
+        containerNode &&
+        containerNode instanceof HTMLElement &&
+        containerNode !== editorRef.current
+      ) {
+        const containerRect = containerNode.getBoundingClientRect();
+        if (containerRect.height > 0) {
+          caretRef.current.style.opacity = "1";
+          caretRef.current.style.height = `${containerRect.height * 0.8}px`;
+          caretRef.current.style.transform = `translate(${containerRect.left}px, ${containerRect.top + containerRect.height * 0.1}px)`;
+          return;
+        }
+      }
+
+      // If container element also has zero rect (truly empty), use a temporary
+      // zero-width space to measure the position
+      const tempSpan = document.createTextNode("\u200B");
+      range.insertNode(tempSpan);
+      const tempRange = document.createRange();
+      tempRange.selectNode(tempSpan);
+      const tempRect = tempRange.getBoundingClientRect();
+
+      if (tempRect.top !== 0 || tempRect.left !== 0) {
+        caretRef.current.style.opacity = "1";
+        caretRef.current.style.transform = `translate(${tempRect.left}px, ${tempRect.top}px)`;
+        // Clean up: remove temp node and restore selection
+        tempSpan.parentNode?.removeChild(tempSpan);
+        // Normalize to merge adjacent text nodes
+        editorRef.current.normalize();
+        // Restore selection position
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+      }
+
+      // Final cleanup if nothing worked
+      tempSpan.parentNode?.removeChild(tempSpan);
+      editorRef.current.normalize();
+
+      // Ultimate fallback: position at editor's padding-top area
       const editorRect = editorRef.current.getBoundingClientRect();
       const computedStyle = getComputedStyle(editorRef.current);
       const paddingTop = parseFloat(computedStyle.paddingTop);
@@ -222,6 +284,9 @@ export default function ZenCanvas({
     }, 500);
   }, []);
 
+  // Keep ref in sync for IME composition handlers
+  updateCaretPositionRef.current = updateCaretPosition;
+
   // --- #8 Zen Focus Mode: Depth of Field ---
   const updateFocusParagraph = useCallback(() => {
     if (!editorRef.current || !focusModeEnabled) return;
@@ -245,11 +310,11 @@ export default function ZenCanvas({
         if (child === currentNode) {
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
-          child.style.transform = "scale(1) translateZ(0)";
+          child.style.transform = "";
         } else {
           child.style.opacity = "0.7";
           child.style.filter = "blur(0.3px)";
-          child.style.transform = "scale(0.995) translateZ(0)";
+          child.style.transform = "";
         }
       }
     });
@@ -263,7 +328,7 @@ export default function ZenCanvas({
         if (child instanceof HTMLElement) {
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
-          child.style.transform = "scale(1) translateZ(0)";
+          child.style.transform = "";
         }
       });
     }
@@ -349,6 +414,9 @@ export default function ZenCanvas({
       inkTimersRef.current.push(timer);
     }
   }, []);
+
+  // Keep ref in sync for IME composition handlers
+  applyDynamicInkRef.current = applyDynamicInk;
 
   // --- #1 Update cursor pan position ---
   const updateCursorPan = useCallback(() => {
@@ -457,7 +525,18 @@ export default function ZenCanvas({
       setPulseIntensity(stability);
 
       // Update all visual effects after DOM updates
-      requestAnimationFrame(() => {
+      // For Enter key, use double requestAnimationFrame because contentEditable
+      // needs an extra frame to finish creating the new block element
+      const isEnterKey = e.key === "Enter";
+      const scheduleUpdate = (fn: () => void) => {
+        if (isEnterKey) {
+          requestAnimationFrame(() => requestAnimationFrame(fn));
+        } else {
+          requestAnimationFrame(fn);
+        }
+      };
+
+      scheduleUpdate(() => {
         updateCaretPosition();
         updateFocusParagraph();
         typewriterScroll();
