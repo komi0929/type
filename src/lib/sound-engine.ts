@@ -420,140 +420,259 @@ export class SoundEngine {
     }
   }
 
-  // --- Accent Sounds for Punctuation / Enter / Backspace / Space ---
+  // --- Accent Sounds: Preset-Adaptive with Stochastic Variations ---
+  // Each accent type generates unique sounds by deriving parameters from
+  // the current preset's timbre + controlled randomization for natural feel.
+
+  /** Stochastic variation: returns value ± range centered on base */
+  private vary(base: number, range: number): number {
+    return base + (Math.random() * 2 - 1) * range;
+  }
+
+  /** Pick random element from array */
+  private pick<T>(arr: T[]): T {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
 
   private playAccentSound(type: AccentKey): void {
-    if (!this.ctx || !this.masterGain) return;
+    if (!this.ctx || !this.masterGain || !this.currentPreset) return;
     const now = this.ctx.currentTime;
+    const preset = this.currentPreset;
+
+    // Derive timbre characteristics from current preset
+    const baseFreq = preset.keystroke.pitchBase;
+    const brightness = preset.keystroke.filterFreq;
+    const warmth = preset.keystroke.toneGain;
+    const isDeep = baseFreq < 300; // deep-thock, mode-c, void, deep-ocean
+    const isBright = brightness > 1000; // midnight-rain, asmr, aurora, zen-drops
+    const toneType = preset.keystroke.toneType;
 
     switch (type) {
       case "punctuation": {
-        // Soft bell / chime — high resonant tone with long decay
+        // Resonant chime — adapts to preset's pitch range
+        // 10 variations via frequency spread + harmonic ratios
+        const harmonicRatios = [
+          2.0, 2.5, 3.0, 3.5, 4.0, 1.5, 2.7, 3.3, 1.8, 2.2,
+        ];
+        const ratio = this.pick(harmonicRatios);
+        const fundFreq = this.vary(isBright ? 1800 : 900, isBright ? 600 : 300);
+        const decayTime = this.vary(0.8, 0.3);
+
+        // Fundamental
         const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.12, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+        gain.gain.setValueAtTime(this.vary(0.1, 0.03), now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + decayTime);
         gain.connect(this.masterGain);
 
         const osc = this.ctx.createOscillator();
         osc.type = "sine";
-        osc.frequency.value = 1200 + Math.random() * 400;
+        osc.frequency.value = fundFreq;
         osc.connect(gain);
         osc.start(now);
-        osc.stop(now + 0.85);
+        osc.stop(now + decayTime + 0.05);
 
-        // Subtle second harmonic
+        // Harmonic overtone (gives each hit a different color)
         const gain2 = this.ctx.createGain();
-        gain2.gain.setValueAtTime(0.05, now);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+        const harmonicVol = this.vary(0.04, 0.02);
+        gain2.gain.setValueAtTime(Math.max(0.01, harmonicVol), now);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + decayTime * 1.3);
         gain2.connect(this.masterGain);
 
         const osc2 = this.ctx.createOscillator();
         osc2.type = "sine";
-        osc2.frequency.value = osc.frequency.value * 2.5;
+        osc2.frequency.value = fundFreq * ratio;
         osc2.connect(gain2);
         osc2.start(now);
-        osc2.stop(now + 1.25);
+        osc2.stop(now + decayTime * 1.3 + 0.05);
+
+        // For deep presets: add subtle body resonance
+        if (isDeep) {
+          const bodyGain = this.ctx.createGain();
+          bodyGain.gain.setValueAtTime(0.03, now);
+          bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+          bodyGain.connect(this.masterGain);
+
+          const bodyOsc = this.ctx.createOscillator();
+          bodyOsc.type = toneType;
+          bodyOsc.frequency.value = baseFreq * this.vary(2, 0.5);
+          bodyOsc.connect(bodyGain);
+          bodyOsc.start(now);
+          bodyOsc.stop(now + 0.45);
+        }
         break;
       }
+
       case "enter": {
-        // #3 Key Topology: Deep impact — heavy "thud" + sub-bass rumble
-        const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.18, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 1.8);
-        gain.connect(this.masterGain);
+        // Deep impact — variant selection based on stochastic parameters
+        // Each press sounds slightly different: pitch, decay, noise color, sub depth
+        const variant = Math.random(); // 0..1 controls overall character
+        const impactFreq = this.vary(isDeep ? 120 : 180, 40);
+        const sweepTarget = this.vary(isDeep ? 30 : 50, 15);
+        const decayTime = this.vary(1.5, 0.5);
+        const impactVol = this.vary(0.15, 0.04);
 
-        const osc = this.ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(160, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 1.8);
-        osc.connect(gain);
-        osc.start(now);
-        osc.stop(now + 1.85);
+        // Layer 1: Impact sweep (sine descending — pitch varies per hit)
+        const impactGain = this.ctx.createGain();
+        impactGain.gain.setValueAtTime(impactVol, now);
+        impactGain.gain.exponentialRampToValueAtTime(0.001, now + decayTime);
+        impactGain.connect(this.masterGain);
 
-        // Sub-bass rumble layer
+        const impactOsc = this.ctx.createOscillator();
+        impactOsc.type = "sine";
+        impactOsc.frequency.setValueAtTime(impactFreq, now);
+        impactOsc.frequency.exponentialRampToValueAtTime(
+          Math.max(20, sweepTarget),
+          now + decayTime,
+        );
+        impactOsc.connect(impactGain);
+        impactOsc.start(now);
+        impactOsc.stop(now + decayTime + 0.05);
+
+        // Layer 2: Sub-bass pulse (depth varies)
+        const subFreq = this.vary(isDeep ? 35 : 55, 12);
+        const subDecay = this.vary(0.5, 0.15);
         const subGain = this.ctx.createGain();
-        subGain.gain.setValueAtTime(0.12, now);
-        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+        subGain.gain.setValueAtTime(this.vary(0.1, 0.03), now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + subDecay);
         subGain.connect(this.masterGain);
 
         const subOsc = this.ctx.createOscillator();
         subOsc.type = "sine";
-        subOsc.frequency.value = 50;
+        subOsc.frequency.value = subFreq;
         subOsc.connect(subGain);
         subOsc.start(now);
-        subOsc.stop(now + 0.65);
+        subOsc.stop(now + subDecay + 0.05);
 
-        // Noise wash for spaciousness
-        const noiseGain = this.ctx.createGain();
-        noiseGain.gain.setValueAtTime(0.05, now);
-        noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
-        noiseGain.connect(this.masterGain);
+        // Layer 3: Noise wash (different coloring per variant)
+        const noiseType = variant < 0.5 ? "brown" : "pink";
+        const noiseBuf = this.noiseBuffers.get(noiseType);
+        if (noiseBuf) {
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(this.vary(0.04, 0.02), now);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+          noiseGain.connect(this.masterGain);
 
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = "lowpass";
-        filter.frequency.value = 400;
-        filter.connect(noiseGain);
+          const noiseFilter = this.ctx.createBiquadFilter();
+          noiseFilter.type = "lowpass";
+          noiseFilter.frequency.value = this.vary(350, 150);
+          noiseFilter.connect(noiseGain);
 
-        const noiseBuffer = this.noiseBuffers.get("brown");
-        if (noiseBuffer) {
           const src = this.ctx.createBufferSource();
-          src.buffer = noiseBuffer;
-          src.connect(filter);
-          src.start(now, 0, 0.85);
+          src.buffer = noiseBuf;
+          src.connect(noiseFilter);
+          src.start(now, Math.random() * (noiseBuf.duration - 1), 0.75);
+        }
+
+        // Layer 4 (bright presets only): Metallic ping — adds brightness
+        if (isBright) {
+          const pingGain = this.ctx.createGain();
+          pingGain.gain.setValueAtTime(0.03, now);
+          pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+          pingGain.connect(this.masterGain);
+
+          const pingOsc = this.ctx.createOscillator();
+          pingOsc.type = "sine";
+          pingOsc.frequency.value = this.vary(800, 200);
+          pingOsc.connect(pingGain);
+          pingOsc.start(now);
+          pingOsc.stop(now + 0.65);
+        }
+
+        // Layer 5: Body resonance using preset's toneType for character
+        if (warmth > 0.2) {
+          const bodyGain = this.ctx.createGain();
+          bodyGain.gain.setValueAtTime(this.vary(0.04, 0.02), now);
+          bodyGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+          bodyGain.connect(this.masterGain);
+
+          const bodyOsc = this.ctx.createOscillator();
+          bodyOsc.type = toneType;
+          bodyOsc.frequency.value = this.vary(baseFreq * 0.5, baseFreq * 0.1);
+          bodyOsc.connect(bodyGain);
+          bodyOsc.start(now);
+          bodyOsc.stop(now + 0.35);
         }
         break;
       }
-      case "backspace": {
-        // #2 Ghost Rewrite — sand crumbling + reverse-envelope effect
-        // Instead of simple pitch-up, create a "deconstruction" sound
 
-        // Layer 1: Filtered noise burst — sand crumbling (descending sweep)
+      case "backspace": {
+        // Ghost Rewrite — erasure as physical process
+        // Variations: different crumble textures, reverse speeds, grain density
+        const crumbleSpeed = this.vary(0.2, 0.08);
+        const crumbleHigh = this.vary(isBright ? 5000 : 3500, 1000);
+        const crumbleLow = this.vary(isDeep ? 500 : 900, 200);
+        const variant = Math.random();
+
+        // Layer 1: Crumble noise sweep (direction & speed varies)
         const crumbleGain = this.ctx.createGain();
-        // Reverse envelope: starts soft, peaks, then cuts sharply
         crumbleGain.gain.setValueAtTime(0.02, now);
-        crumbleGain.gain.linearRampToValueAtTime(0.12, now + 0.08);
-        crumbleGain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+        crumbleGain.gain.linearRampToValueAtTime(
+          this.vary(0.1, 0.03),
+          now + 0.06,
+        );
+        crumbleGain.gain.exponentialRampToValueAtTime(
+          0.001,
+          now + crumbleSpeed,
+        );
         crumbleGain.connect(this.masterGain);
 
         const crumbleFilter = this.ctx.createBiquadFilter();
         crumbleFilter.type = "bandpass";
-        crumbleFilter.frequency.setValueAtTime(4000, now);
-        crumbleFilter.frequency.exponentialRampToValueAtTime(800, now + 0.2);
-        crumbleFilter.Q.value = 1.5;
+        crumbleFilter.frequency.setValueAtTime(crumbleHigh, now);
+        crumbleFilter.frequency.exponentialRampToValueAtTime(
+          crumbleLow,
+          now + crumbleSpeed * 0.9,
+        );
+        crumbleFilter.Q.value = this.vary(1.5, 0.5);
         crumbleFilter.connect(crumbleGain);
 
-        const crumbleNoise = this.noiseBuffers.get("white");
+        const crumbleNoise = this.noiseBuffers.get(
+          variant < 0.5 ? "white" : "crackle",
+        );
         if (crumbleNoise) {
           const src = this.ctx.createBufferSource();
           src.buffer = crumbleNoise;
           src.connect(crumbleFilter);
-          src.start(now, Math.random() * 1.5, 0.3);
+          src.start(
+            now,
+            Math.random() * (crumbleNoise.duration - 0.5),
+            crumbleSpeed + 0.1,
+          );
         }
 
-        // Layer 2: Tonal reverse-suck — pitch descends (feeling of being pulled back)
+        // Layer 2: Tonal reverse suck (adapted to preset pitch)
+        const suckBaseFreq = this.vary(baseFreq * 2, baseFreq * 0.5);
+        const suckTargetFreq = this.vary(baseFreq * 0.5, baseFreq * 0.15);
+        const suckDuration = this.vary(0.15, 0.05);
+
         const revGain = this.ctx.createGain();
         revGain.gain.setValueAtTime(0.01, now);
-        revGain.gain.linearRampToValueAtTime(0.08, now + 0.06);
-        revGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        revGain.gain.linearRampToValueAtTime(this.vary(0.06, 0.02), now + 0.05);
+        revGain.gain.exponentialRampToValueAtTime(0.001, now + suckDuration);
         revGain.connect(this.masterGain);
 
         const revOsc = this.ctx.createOscillator();
-        revOsc.type = "sine";
-        revOsc.frequency.setValueAtTime(600, now);
-        revOsc.frequency.exponentialRampToValueAtTime(150, now + 0.15);
+        revOsc.type = toneType;
+        revOsc.frequency.setValueAtTime(Math.max(60, suckBaseFreq), now);
+        revOsc.frequency.exponentialRampToValueAtTime(
+          Math.max(20, suckTargetFreq),
+          now + suckDuration * 0.9,
+        );
         revOsc.connect(revGain);
         revOsc.start(now);
-        revOsc.stop(now + 0.22);
+        revOsc.stop(now + suckDuration + 0.05);
 
-        // Layer 3: Subtle granular texture (crackle pops)
+        // Layer 3: Granular crackle (density varies)
+        const grainDuration = this.vary(0.1, 0.04);
+        const grainVol = this.vary(0.03, 0.015);
         const grainGain = this.ctx.createGain();
-        grainGain.gain.setValueAtTime(0.04, now);
-        grainGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+        grainGain.gain.setValueAtTime(Math.max(0.01, grainVol), now);
+        grainGain.gain.exponentialRampToValueAtTime(0.001, now + grainDuration);
         grainGain.connect(this.masterGain);
 
         const grainFilter = this.ctx.createBiquadFilter();
         grainFilter.type = "highpass";
-        grainFilter.frequency.value = 3000;
+        grainFilter.frequency.value = this.vary(3000, 800);
         grainFilter.connect(grainGain);
 
         const grainNoise = this.noiseBuffers.get("crackle");
@@ -561,43 +680,74 @@ export class SoundEngine {
           const grainSrc = this.ctx.createBufferSource();
           grainSrc.buffer = grainNoise;
           grainSrc.connect(grainFilter);
-          grainSrc.start(now, Math.random() * 3, 0.15);
+          grainSrc.start(
+            now,
+            Math.random() * (grainNoise.duration - 0.3),
+            grainDuration + 0.05,
+          );
         }
         break;
       }
+
       case "space": {
-        // #3 Key Topology: Hollow resonance — spacious cavity sound
-        const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-        gain.connect(this.masterGain);
+        // Hollow resonance — spacious cavity adapted to preset character
+        // Variations: resonant frequency, body depth, air noise color
+        const bodyFreq = this.vary(isDeep ? 100 : 160, 30);
+        const airColor = this.vary(isDeep ? 180 : 300, 60);
+        const bodyDecay = this.vary(0.35, 0.1);
 
-        // Low resonant tone — hollow body effect
-        const osc = this.ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.value = 140 + Math.random() * 30;
-        osc.connect(gain);
-        osc.start(now);
-        osc.stop(now + 0.4);
+        // Layer 1: Body resonance
+        const bodyGain = this.ctx.createGain();
+        bodyGain.gain.setValueAtTime(this.vary(0.07, 0.02), now);
+        bodyGain.gain.exponentialRampToValueAtTime(0.001, now + bodyDecay);
+        bodyGain.connect(this.masterGain);
 
-        // Breathy noise layer through bandpass — air escaping
+        const bodyOsc = this.ctx.createOscillator();
+        bodyOsc.type = toneType;
+        bodyOsc.frequency.value = bodyFreq;
+        bodyOsc.connect(bodyGain);
+        bodyOsc.start(now);
+        bodyOsc.stop(now + bodyDecay + 0.05);
+
+        // Layer 2: Air escape noise
+        const airDecay = this.vary(0.2, 0.06);
         const breathGain = this.ctx.createGain();
-        breathGain.gain.setValueAtTime(0.06, now);
-        breathGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+        breathGain.gain.setValueAtTime(this.vary(0.05, 0.02), now);
+        breathGain.gain.exponentialRampToValueAtTime(0.001, now + airDecay);
         breathGain.connect(this.masterGain);
 
         const breathFilter = this.ctx.createBiquadFilter();
         breathFilter.type = "bandpass";
-        breathFilter.frequency.value = 250;
-        breathFilter.Q.value = 3;
+        breathFilter.frequency.value = airColor;
+        breathFilter.Q.value = this.vary(3, 1);
         breathFilter.connect(breathGain);
 
-        const breathNoise = this.noiseBuffers.get("brown");
+        const noiseType = isDeep ? "brown" : isBright ? "white" : "pink";
+        const breathNoise = this.noiseBuffers.get(noiseType);
         if (breathNoise) {
           const src = this.ctx.createBufferSource();
           src.buffer = breathNoise;
           src.connect(breathFilter);
-          src.start(now, Math.random() * 3, 0.25);
+          src.start(
+            now,
+            Math.random() * (breathNoise.duration - 0.5),
+            airDecay + 0.05,
+          );
+        }
+
+        // Layer 3 (bright presets): Subtle upper harmonic shimmer
+        if (isBright) {
+          const shimGain = this.ctx.createGain();
+          shimGain.gain.setValueAtTime(0.02, now);
+          shimGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          shimGain.connect(this.masterGain);
+
+          const shimOsc = this.ctx.createOscillator();
+          shimOsc.type = "sine";
+          shimOsc.frequency.value = this.vary(bodyFreq * 5, bodyFreq);
+          shimOsc.connect(shimGain);
+          shimOsc.start(now);
+          shimOsc.stop(now + 0.2);
         }
         break;
       }
