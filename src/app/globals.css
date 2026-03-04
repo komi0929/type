@@ -28,8 +28,8 @@
 
 /* === Light Mode — warm paper tones === */
 :root[data-theme="light"] {
-  --color-background: #f8f5f0 !important;
-  --color-foreground: #2a2725 !important;
+  --color-background: #f5f2ec !important;
+  --color-foreground: #1a1816 !important;
   --color-foreground-dim: #9b9590 !important;
   --color-accent: #8b7355 !important;
   --color-surface: rgba(0, 0, 0, 0.03) !important;
@@ -116,21 +116,15 @@ body {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   padding: 2rem;
   transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: text;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-
-.zen-canvas::-webkit-scrollbar {
-  display: none;
 }
 
 .zen-canvas.zen-idle {
-  opacity: 0.6;
+  opacity: 0.88;
 }
 
 .zen-canvas.zen-active {
@@ -139,25 +133,28 @@ body {
 
 /* === Zen Editor === */
 .zen-editor {
+  position: relative;
   width: 100%;
   max-width: 680px;
   min-height: 60vh;
+  max-height: 80vh;
+  overflow-y: auto;
   font-family: var(--font-serif);
   font-size: 1.25rem;
   /* #6 Kinetic Typography: dynamic weight via CSS custom property */
   font-weight: var(--dynamic-font-weight, 400);
-  /* Typography: WCAG 1.5x+ line-height, Readability Consortium optimal */
+  /* Typography: WCAG 1.5x+ line-height */
   line-height: 1.75;
   letter-spacing: 0.01em;
   color: var(--color-foreground);
   outline: none;
   border: none;
   background: transparent;
-  /* #9 Typewriter Scroll: generous vertical padding for center locking */
+  /* #9 Typewriter Scroll: top/bottom padding for center locking */
   padding: 40vh 0;
   word-break: break-word;
   overflow-wrap: break-word;
-  /* #10 UIノイズ排除: hide native caret */
+  /* #10 UI noise: hide native caret (custom caret replaces it) */
   caret-color: transparent;
   scrollbar-width: none;
   scroll-behavior: smooth;
@@ -231,12 +228,11 @@ body {
     filter 0.5s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   transform-origin: left center;
-  will-change: opacity, filter, transform;
 }
 
 /* ============================================================
    #11 Smooth Caret — fluid sliding cursor
-   Absolute-positioned div with CSS transition
+   Fixed-positioned div with CSS transition
    ============================================================ */
 
 .smooth-caret {
@@ -244,7 +240,7 @@ body {
   top: 0;
   left: 0;
   width: 2px;
-  height: 1.3em;
+  height: 24px;
   background: var(--color-accent);
   border-radius: 1px;
   pointer-events: none;
@@ -305,10 +301,10 @@ body {
 @keyframes breathe {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 0.85;
   }
   50% {
-    opacity: 0.65;
+    opacity: 0.95;
   }
 }
 
@@ -670,7 +666,7 @@ body {
    ============================================================ */
 
 .zen-deep-idle .zen-editor {
-  opacity: 0.15 !important;
+  opacity: 0.45 !important;
   transition: opacity 5s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 

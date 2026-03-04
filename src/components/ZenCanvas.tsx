@@ -107,7 +107,6 @@ export default function ZenCanvas({
     const engine = engineRef.current;
     return () => {
       engine.dispose();
-      // Clean up ink timers
       inkTimersRef.current.forEach(clearTimeout);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -138,9 +137,7 @@ export default function ZenCanvas({
 
     const handleCompositionStart = () => {
       isComposingRef.current = true;
-      // Show native caret during composition
       editor.classList.add("ime-composing");
-      // Hide custom caret
       if (caretRef.current) {
         caretRef.current.classList.add("caret-composing");
       }
@@ -148,13 +145,10 @@ export default function ZenCanvas({
 
     const handleCompositionEnd = () => {
       isComposingRef.current = false;
-      // Hide native caret again
       editor.classList.remove("ime-composing");
-      // Show custom caret
       if (caretRef.current) {
         caretRef.current.classList.remove("caret-composing");
       }
-      // Update caret position after composition
       requestAnimationFrame(() => {
         updateCaretPosition();
         applyDynamicInk();
@@ -175,27 +169,46 @@ export default function ZenCanvas({
     if (!caretRef.current || !editorRef.current) return;
 
     const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) return;
-
-    const range = selection.getRangeAt(0);
-    if (!range.collapsed) {
-      // Text is selected, hide custom caret
+    if (!selection || selection.rangeCount === 0) {
       caretRef.current.style.opacity = "0";
       return;
     }
 
-    const rect = range.getBoundingClientRect();
-    const editorRect = editorRef.current.getBoundingClientRect();
+    const range = selection.getRangeAt(0);
 
-    // If rect is zero (e.g., empty editor), use editor position
-    if (rect.top === 0 && rect.left === 0 && rect.width === 0) {
-      const computedStyle = getComputedStyle(editorRef.current);
-      const paddingTop = parseFloat(computedStyle.paddingTop);
-      caretRef.current.style.opacity = "1";
-      caretRef.current.style.transform = `translate(${editorRect.left}px, ${editorRect.top + paddingTop}px)`;
+    // Hide custom caret when text is selected (range not collapsed)
+    if (!range.collapsed) {
+      caretRef.current.style.opacity = "0";
       return;
     }
 
+    // Hide during IME composition
+    if (isComposingRef.current) {
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+
+    // If rect is zero (e.g., empty editor or no valid position)
+    if (
+      rect.width === 0 &&
+      rect.height === 0 &&
+      rect.top === 0 &&
+      rect.left === 0
+    ) {
+      // Fallback: position at editor's padding-top area
+      const editorRect = editorRef.current.getBoundingClientRect();
+      const computedStyle = getComputedStyle(editorRef.current);
+      const paddingTop = parseFloat(computedStyle.paddingTop);
+      const paddingLeft = parseFloat(computedStyle.paddingLeft);
+
+      caretRef.current.style.opacity = "1";
+      caretRef.current.style.transform = `translate(${editorRect.left + paddingLeft}px, ${editorRect.top + paddingTop - editorRef.current.scrollTop}px)`;
+      return;
+    }
+
+    // Normal case: use getBoundingClientRect() which gives viewport coordinates
+    // position: fixed + top: 0 + left: 0 means translate values = viewport coords
     caretRef.current.style.opacity = "1";
     caretRef.current.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
 
@@ -209,7 +222,7 @@ export default function ZenCanvas({
     }, 500);
   }, []);
 
-  // --- #8 Zen Focus Mode: highlight current paragraph + Depth of Field ---
+  // --- #8 Zen Focus Mode: Depth of Field ---
   const updateFocusParagraph = useCallback(() => {
     if (!editorRef.current || !focusModeEnabled) return;
 
@@ -222,6 +235,7 @@ export default function ZenCanvas({
     const range = selection.getRangeAt(0);
     let currentNode: Node | null = range.startContainer;
 
+    // Walk up to find the direct child of editor
     while (currentNode && currentNode.parentNode !== editor) {
       currentNode = currentNode.parentNode;
     }
@@ -229,14 +243,12 @@ export default function ZenCanvas({
     children.forEach((child) => {
       if (child instanceof HTMLElement) {
         if (child === currentNode) {
-          // Current line: sharp, near, full opacity
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
           child.style.transform = "scale(1) translateZ(0)";
         } else {
-          // Other lines: faded, slightly blurred, scaled down (depth)
-          child.style.opacity = "0.35";
-          child.style.filter = "blur(0.6px)";
+          child.style.opacity = "0.7";
+          child.style.filter = "blur(0.3px)";
           child.style.transform = "scale(0.995) translateZ(0)";
         }
       }
@@ -257,8 +269,11 @@ export default function ZenCanvas({
     }
   }, [isIdle]);
 
-  // --- #9 Typewriter Scroll: keep cursor at screen center ---
+  // --- #9 Typewriter Scroll: keep cursor at center of EDITOR ---
   const typewriterScroll = useCallback(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
 
@@ -266,12 +281,15 @@ export default function ZenCanvas({
     const rect = range.getBoundingClientRect();
     if (rect.top === 0 && rect.left === 0) return;
 
-    const viewportCenter = window.innerHeight / 2;
-    const offset = rect.top - viewportCenter;
+    // Calculate editor's visible center
+    const editorRect = editor.getBoundingClientRect();
+    const editorVisibleCenter = editorRect.top + editorRect.height / 2;
 
-    // Lower threshold for more responsive centering
-    if (Math.abs(offset) > 20) {
-      window.scrollBy({ top: offset, behavior: "smooth" });
+    // How far is cursor from the editor's visible center?
+    const offset = rect.top - editorVisibleCenter;
+
+    if (Math.abs(offset) > 30) {
+      editor.scrollBy({ top: offset, behavior: "smooth" });
     }
   }, []);
 
@@ -305,26 +323,26 @@ export default function ZenCanvas({
     if (!selection || selection.rangeCount === 0) return;
 
     const range = selection.getRangeAt(0);
-    let node = range.startContainer;
+    let node: Node | null = range.startContainer;
 
-    // Walk up to find the block-level parent in the editor
     while (node && node.parentNode !== editorRef.current) {
-      node = node.parentNode!;
+      node = node.parentNode;
     }
 
     if (node instanceof HTMLElement) {
-      // Apply ink-fresh class to the current paragraph
       node.classList.remove("ink-drying");
       node.classList.add("ink-fresh");
 
-      // Schedule transition to dry
       const timer = setTimeout(() => {
-        node.classList.remove("ink-fresh");
-        node.classList.add("ink-drying");
+        if (node instanceof HTMLElement) {
+          node.classList.remove("ink-fresh");
+          node.classList.add("ink-drying");
+        }
 
-        // Remove drying class after transition completes
         const cleanTimer = setTimeout(() => {
-          node.classList.remove("ink-drying");
+          if (node instanceof HTMLElement) {
+            node.classList.remove("ink-drying");
+          }
         }, 1500);
         inkTimersRef.current.push(cleanTimer);
       }, 2000);
@@ -380,7 +398,7 @@ export default function ZenCanvas({
         return;
       }
 
-      // Skip modifier keys, navigation keys (but allow arrows for caret update)
+      // Skip modifier keys
       if (
         e.key === "Shift" ||
         e.key === "Control" ||
@@ -431,14 +449,14 @@ export default function ZenCanvas({
       // Determine accent key type
       const accentKey = getAccentKey(e.key);
 
-      // #1 Play keystroke sound with WPM, accent, and key for spatial panning
+      // Play keystroke sound with WPM, accent, and key
       engineRef.current.playKeystroke(wpm, accentKey, e.key);
 
       // Update Pulse Indicator
       const stability = calculateRhythmStability();
       setPulseIntensity(stability);
 
-      // Update focus paragraph + typewriter scroll + markdown + caret + ink
+      // Update all visual effects after DOM updates
       requestAnimationFrame(() => {
         updateCaretPosition();
         updateFocusParagraph();
@@ -466,7 +484,6 @@ export default function ZenCanvas({
         intervalHistoryRef.current = [];
       }, 3000);
 
-      // Deep idle: 30s → text fades (Transient Hypofrontality support)
       deepIdleTimerRef.current = setTimeout(() => {
         setIsDeepIdle(true);
       }, 30000);
@@ -522,7 +539,7 @@ export default function ZenCanvas({
       className={`zen-canvas ${isIdle ? "zen-idle" : "zen-active"} ${isDeepIdle ? "zen-deep-idle" : ""}`}
       onClick={() => editorRef.current?.focus()}
     >
-      {/* Pulse Indicator — screen edge glow based on typing rhythm */}
+      {/* Pulse Indicator */}
       <div
         className="pulse-indicator"
         style={
@@ -532,7 +549,7 @@ export default function ZenCanvas({
         }
       />
 
-      {/* #11 Smooth Caret — custom animated cursor */}
+      {/* #11 Smooth Caret — fixed-position animated cursor */}
       <div ref={caretRef} className="smooth-caret caret-idle" />
 
       {/* Startup overlay */}
@@ -560,7 +577,7 @@ export default function ZenCanvas({
         data-placeholder="ここに書き始める..."
       />
 
-      {/* Character counter — minimal, Ghost Mode compatible */}
+      {/* Character counter */}
       <div className={`char-counter ${isIdle ? "" : "ghost-hidden"}`}>
         {charCount.toLocaleString()}文字
       </div>
