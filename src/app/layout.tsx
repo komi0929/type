@@ -5,7 +5,7 @@ import "./globals.css";
 const notoSerifJP = Noto_Serif_JP({
   variable: "--font-noto-serif-jp",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["200", "300", "400", "500", "600", "700", "900"],
   display: "swap",
 });
 

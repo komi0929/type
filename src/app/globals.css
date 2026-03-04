@@ -3,42 +3,45 @@
 /* ============================================================
    FlowType — Zen Design System
    A writing interface stripped to its essence
+   "Nature Distilled" — organic warmth, not digital cold
    ============================================================ */
 
 @theme inline {
-  --color-background: #0d0d0f;
-  --color-foreground: #e8e6e3;
-  --color-foreground-dim: #6b6966;
-  --color-accent: #c4b5a0;
+  /* #4 Nature Distilled: warm charcoal instead of cold pure black */
+  --color-background: #141210;
+  --color-foreground: #e5e0d8;
+  --color-foreground-dim: #706b63;
+  --color-accent: #c8b69a;
   --color-surface: rgba(255, 255, 255, 0.04);
   --color-surface-hover: rgba(255, 255, 255, 0.08);
   --color-border: rgba(255, 255, 255, 0.06);
-  --color-palette-bg: rgba(30, 30, 34, 0.92);
+  --color-palette-bg: rgba(26, 24, 22, 0.94);
   --color-palette-overlay: rgba(0, 0, 0, 0.5);
   --color-palette-shadow: rgba(0, 0, 0, 0.5);
   --color-palette-inset: rgba(255, 255, 255, 0.05);
   --color-kbd-bg: rgba(255, 255, 255, 0.06);
   --color-kbd-border: rgba(255, 255, 255, 0.1);
-  --color-selection: rgba(196, 181, 160, 0.2);
+  /* #5 Organic Selection — moonlight, not cold blue */
+  --color-selection: rgba(255, 252, 240, 0.1);
   --font-serif: var(--font-noto-serif-jp), "Georgia", serif;
 }
 
-/* === Light Mode === */
+/* === Light Mode — warm paper tones === */
 :root[data-theme="light"] {
-  --color-background: #faf8f5 !important;
-  --color-foreground: #2c2a27 !important;
-  --color-foreground-dim: #9e9a94 !important;
+  --color-background: #f8f5f0 !important;
+  --color-foreground: #2a2725 !important;
+  --color-foreground-dim: #9b9590 !important;
   --color-accent: #8b7355 !important;
   --color-surface: rgba(0, 0, 0, 0.03) !important;
   --color-surface-hover: rgba(0, 0, 0, 0.06) !important;
   --color-border: rgba(0, 0, 0, 0.08) !important;
-  --color-palette-bg: rgba(255, 255, 255, 0.95) !important;
-  --color-palette-overlay: rgba(0, 0, 0, 0.2) !important;
-  --color-palette-shadow: rgba(0, 0, 0, 0.15) !important;
+  --color-palette-bg: rgba(252, 250, 245, 0.96) !important;
+  --color-palette-overlay: rgba(0, 0, 0, 0.15) !important;
+  --color-palette-shadow: rgba(0, 0, 0, 0.12) !important;
   --color-palette-inset: rgba(255, 255, 255, 0.8) !important;
   --color-kbd-bg: rgba(0, 0, 0, 0.05) !important;
   --color-kbd-border: rgba(0, 0, 0, 0.12) !important;
-  --color-selection: rgba(139, 115, 85, 0.15) !important;
+  --color-selection: rgba(120, 100, 70, 0.12) !important;
 }
 
 /* === Smooth theme transition === */
@@ -113,11 +116,17 @@ body {
   position: fixed;
   inset: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: 2rem;
   transition: opacity 1.5s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: text;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.zen-canvas::-webkit-scrollbar {
+  display: none;
 }
 
 .zen-canvas.zen-idle {
@@ -133,10 +142,10 @@ body {
   width: 100%;
   max-width: 680px;
   min-height: 60vh;
-  max-height: 80vh;
-  overflow-y: auto;
   font-family: var(--font-serif);
   font-size: 1.25rem;
+  /* #6 Kinetic Typography: dynamic weight via CSS custom property */
+  font-weight: var(--dynamic-font-weight, 400);
   /* Typography: WCAG 1.5x+ line-height, Readability Consortium optimal */
   line-height: 1.75;
   letter-spacing: 0.01em;
@@ -144,19 +153,31 @@ body {
   outline: none;
   border: none;
   background: transparent;
-  padding: 2rem 0;
+  /* #9 Typewriter Scroll: generous vertical padding for center locking */
+  padding: 40vh 0;
   word-break: break-word;
   overflow-wrap: break-word;
-  caret-color: var(--color-accent);
+  /* #10 UIノイズ排除: hide native caret */
+  caret-color: transparent;
   scrollbar-width: none;
   scroll-behavior: smooth;
   transition:
     color 0.3s ease,
-    opacity 1.5s ease;
+    opacity 1.5s ease,
+    font-weight 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .zen-editor::-webkit-scrollbar {
   display: none;
+}
+
+/* #5 Organic Selection — soft moonlight highlight */
+.zen-editor::selection {
+  background: var(--color-selection);
+}
+
+.zen-editor *::selection {
+  background: var(--color-selection);
 }
 
 /* Placeholder */
@@ -174,10 +195,88 @@ body {
   --glow-opacity: calc(0.3 + var(--caret-intensity, 0) * 0.7);
 }
 
-@supports (caret-color: var(--color-accent)) {
-  .zen-editor::selection {
-    background: var(--color-selection);
+/* ============================================================
+   #7 Dynamic Ink — freshly typed text has subtle glow
+   Characters "dry" over time: glossy → matte
+   ============================================================ */
+
+.ink-fresh {
+  text-shadow:
+    0 0 4px rgba(200, 182, 154, 0.25),
+    0 0 1px rgba(255, 255, 255, 0.15);
+  transition:
+    text-shadow 2s ease-out,
+    opacity 2s ease-out;
+}
+
+.ink-drying {
+  text-shadow: none;
+  transition: text-shadow 1.5s ease-out;
+}
+
+:root[data-theme="light"] .ink-fresh {
+  text-shadow:
+    0 0 3px rgba(139, 115, 85, 0.15),
+    0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+/* ============================================================
+   #8 Depth of Field — current line "near", others "far"
+   Smooth transitions for blur + scale + opacity
+   ============================================================ */
+
+.zen-editor > * {
+  transition:
+    opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    filter 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: left center;
+  will-change: opacity, filter, transform;
+}
+
+/* ============================================================
+   #11 Smooth Caret — fluid sliding cursor
+   Absolute-positioned div with CSS transition
+   ============================================================ */
+
+.smooth-caret {
+  position: absolute;
+  width: 2px;
+  height: 1.3em;
+  background: var(--color-accent);
+  border-radius: 1px;
+  pointer-events: none;
+  z-index: 20;
+  transition:
+    transform 0.12s cubic-bezier(0.25, 0.1, 0.25, 1),
+    opacity 0.15s ease;
+  will-change: transform;
+  /* Gentle glow around caret */
+  box-shadow: 0 0 6px rgba(200, 182, 154, 0.3);
+}
+
+/* Caret blink animation when idle */
+.smooth-caret.caret-idle {
+  animation: caret-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes caret-pulse {
+  0%,
+  100% {
+    opacity: 1;
   }
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* Hide caret during IME composition */
+.smooth-caret.caret-composing {
+  opacity: 0 !important;
+}
+
+:root[data-theme="light"] .smooth-caret {
+  box-shadow: 0 0 4px rgba(139, 115, 85, 0.25);
 }
 
 /* === Ink Absorption Animation === */
@@ -429,7 +528,7 @@ body {
   .zen-editor {
     font-size: 1.1rem;
     line-height: 1.85;
-    padding: 1rem 0;
+    padding: 35vh 0;
   }
 
   .zen-canvas {
@@ -577,4 +676,12 @@ body {
 /* When exiting deep idle, snap back quickly */
 .zen-canvas:not(.zen-deep-idle) .zen-editor {
   transition: opacity 0.3s ease !important;
+}
+
+/* ============================================================
+   IME Composition — restore native caret during input
+   ============================================================ */
+
+.zen-editor.ime-composing {
+  caret-color: var(--color-accent) !important;
 }

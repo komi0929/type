@@ -39,6 +39,14 @@ export default function ZenCanvas({
   const intervalHistoryRef = useRef<number[]>([]);
   const lastKeystrokeTimeRef = useRef(0);
 
+  // #11 Smooth Caret
+  const caretRef = useRef<HTMLDivElement>(null);
+  const caretIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // #7 Dynamic Ink — track IME composition state
+  const isComposingRef = useRef(false);
+  const inkTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   // --- Calculate WPM ---
   const calculateWPM = useCallback((): number => {
     const now = Date.now();
@@ -99,6 +107,8 @@ export default function ZenCanvas({
     const engine = engineRef.current;
     return () => {
       engine.dispose();
+      // Clean up ink timers
+      inkTimersRef.current.forEach(clearTimeout);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -121,7 +131,85 @@ export default function ZenCanvas({
     };
   }, []);
 
-  // --- Zen Focus Mode: highlight current paragraph ---
+  // --- #7 IME Composition handlers ---
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    const handleCompositionStart = () => {
+      isComposingRef.current = true;
+      // Show native caret during composition
+      editor.classList.add("ime-composing");
+      // Hide custom caret
+      if (caretRef.current) {
+        caretRef.current.classList.add("caret-composing");
+      }
+    };
+
+    const handleCompositionEnd = () => {
+      isComposingRef.current = false;
+      // Hide native caret again
+      editor.classList.remove("ime-composing");
+      // Show custom caret
+      if (caretRef.current) {
+        caretRef.current.classList.remove("caret-composing");
+      }
+      // Update caret position after composition
+      requestAnimationFrame(() => {
+        updateCaretPosition();
+        applyDynamicInk();
+      });
+    };
+
+    editor.addEventListener("compositionstart", handleCompositionStart);
+    editor.addEventListener("compositionend", handleCompositionEnd);
+
+    return () => {
+      editor.removeEventListener("compositionstart", handleCompositionStart);
+      editor.removeEventListener("compositionend", handleCompositionEnd);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // --- #11 Smooth Caret: update position ---
+  const updateCaretPosition = useCallback(() => {
+    if (!caretRef.current || !editorRef.current) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    if (!range.collapsed) {
+      // Text is selected, hide custom caret
+      caretRef.current.style.opacity = "0";
+      return;
+    }
+
+    const rect = range.getBoundingClientRect();
+    const editorRect = editorRef.current.getBoundingClientRect();
+
+    // If rect is zero (e.g., empty editor), use editor position
+    if (rect.top === 0 && rect.left === 0 && rect.width === 0) {
+      const computedStyle = getComputedStyle(editorRef.current);
+      const paddingTop = parseFloat(computedStyle.paddingTop);
+      caretRef.current.style.opacity = "1";
+      caretRef.current.style.transform = `translate(${editorRect.left}px, ${editorRect.top + paddingTop}px)`;
+      return;
+    }
+
+    caretRef.current.style.opacity = "1";
+    caretRef.current.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
+
+    // Reset caret idle animation
+    caretRef.current.classList.remove("caret-idle");
+    if (caretIdleTimerRef.current) clearTimeout(caretIdleTimerRef.current);
+    caretIdleTimerRef.current = setTimeout(() => {
+      if (caretRef.current) {
+        caretRef.current.classList.add("caret-idle");
+      }
+    }, 500);
+  }, []);
+
+  // --- #8 Zen Focus Mode: highlight current paragraph + Depth of Field ---
   const updateFocusParagraph = useCallback(() => {
     if (!editorRef.current || !focusModeEnabled) return;
 
@@ -141,11 +229,15 @@ export default function ZenCanvas({
     children.forEach((child) => {
       if (child instanceof HTMLElement) {
         if (child === currentNode) {
+          // Current line: sharp, near, full opacity
           child.style.opacity = "1";
-          child.style.transition = "opacity 0.3s ease";
+          child.style.filter = "blur(0px)";
+          child.style.transform = "scale(1) translateZ(0)";
         } else {
-          child.style.opacity = "0.25";
-          child.style.transition = "opacity 0.6s ease";
+          // Other lines: faded, slightly blurred, scaled down (depth)
+          child.style.opacity = "0.35";
+          child.style.filter = "blur(0.6px)";
+          child.style.transform = "scale(0.995) translateZ(0)";
         }
       }
     });
@@ -158,13 +250,14 @@ export default function ZenCanvas({
       children.forEach((child) => {
         if (child instanceof HTMLElement) {
           child.style.opacity = "1";
-          child.style.transition = "opacity 1.5s ease";
+          child.style.filter = "blur(0px)";
+          child.style.transform = "scale(1) translateZ(0)";
         }
       });
     }
   }, [isIdle]);
 
-  // --- Typewriter Scroll: keep cursor at screen center ---
+  // --- #9 Typewriter Scroll: keep cursor at screen center ---
   const typewriterScroll = useCallback(() => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
@@ -176,7 +269,8 @@ export default function ZenCanvas({
     const viewportCenter = window.innerHeight / 2;
     const offset = rect.top - viewportCenter;
 
-    if (Math.abs(offset) > 50) {
+    // Lower threshold for more responsive centering
+    if (Math.abs(offset) > 20) {
       window.scrollBy({ top: offset, behavior: "smooth" });
     }
   }, []);
@@ -191,7 +285,6 @@ export default function ZenCanvas({
       if (!(child instanceof HTMLElement)) return;
       const text = child.textContent || "";
 
-      // Heading detection: # ## ###
       if (text.startsWith("### ")) {
         child.className = "md-h3";
       } else if (text.startsWith("## ")) {
@@ -202,6 +295,57 @@ export default function ZenCanvas({
         child.className = "";
       }
     });
+  }, []);
+
+  // --- #7 Dynamic Ink: apply "fresh ink" effect ---
+  const applyDynamicInk = useCallback(() => {
+    if (!editorRef.current || isComposingRef.current) return;
+
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    let node = range.startContainer;
+
+    // Walk up to find the block-level parent in the editor
+    while (node && node.parentNode !== editorRef.current) {
+      node = node.parentNode!;
+    }
+
+    if (node instanceof HTMLElement) {
+      // Apply ink-fresh class to the current paragraph
+      node.classList.remove("ink-drying");
+      node.classList.add("ink-fresh");
+
+      // Schedule transition to dry
+      const timer = setTimeout(() => {
+        node.classList.remove("ink-fresh");
+        node.classList.add("ink-drying");
+
+        // Remove drying class after transition completes
+        const cleanTimer = setTimeout(() => {
+          node.classList.remove("ink-drying");
+        }, 1500);
+        inkTimersRef.current.push(cleanTimer);
+      }, 2000);
+      inkTimersRef.current.push(timer);
+    }
+  }, []);
+
+  // --- #1 Update cursor pan position ---
+  const updateCursorPan = useCallback(() => {
+    if (!editorRef.current) return;
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    const editorRect = editorRef.current.getBoundingClientRect();
+
+    if (editorRect.width > 0) {
+      const ratio = (rect.left - editorRect.left) / editorRect.width;
+      engineRef.current.setCursorPan(Math.max(0, Math.min(1, ratio)));
+    }
   }, []);
 
   // --- Detect accent key type ---
@@ -222,6 +366,7 @@ export default function ZenCanvas({
     }
     if (key === "Enter") return "enter";
     if (key === "Backspace" || key === "Delete") return "backspace";
+    if (key === " ") return "space";
     return "normal";
   }, []);
 
@@ -235,7 +380,7 @@ export default function ZenCanvas({
         return;
       }
 
-      // Skip modifier keys, navigation keys
+      // Skip modifier keys, navigation keys (but allow arrows for caret update)
       if (
         e.key === "Shift" ||
         e.key === "Control" ||
@@ -244,12 +389,21 @@ export default function ZenCanvas({
         e.key === "Tab" ||
         e.key === "CapsLock" ||
         e.key === "Escape" ||
-        e.key.startsWith("Arrow") ||
         e.key === "Home" ||
         e.key === "End" ||
         e.key === "PageUp" ||
         e.key === "PageDown"
       ) {
+        return;
+      }
+
+      // Arrow keys: update caret position but don't play sound
+      if (e.key.startsWith("Arrow")) {
+        requestAnimationFrame(() => {
+          updateCaretPosition();
+          updateFocusParagraph();
+          updateCursorPan();
+        });
         return;
       }
 
@@ -277,18 +431,23 @@ export default function ZenCanvas({
       // Determine accent key type
       const accentKey = getAccentKey(e.key);
 
-      // Play keystroke sound with WPM and accent
-      engineRef.current.playKeystroke(wpm, accentKey);
+      // #1 Play keystroke sound with WPM, accent, and key for spatial panning
+      engineRef.current.playKeystroke(wpm, accentKey, e.key);
 
       // Update Pulse Indicator
       const stability = calculateRhythmStability();
       setPulseIntensity(stability);
 
-      // Update focus paragraph + typewriter scroll + markdown
+      // Update focus paragraph + typewriter scroll + markdown + caret + ink
       requestAnimationFrame(() => {
+        updateCaretPosition();
         updateFocusParagraph();
         typewriterScroll();
         applyMarkdownFormatting();
+        updateCursorPan();
+        if (!isComposingRef.current) {
+          applyDynamicInk();
+        }
       });
 
       // Reset idle & deep idle states
@@ -321,6 +480,9 @@ export default function ZenCanvas({
       typewriterScroll,
       applyMarkdownFormatting,
       onTypingStateChange,
+      updateCaretPosition,
+      updateCursorPan,
+      applyDynamicInk,
     ],
   );
 
@@ -331,7 +493,26 @@ export default function ZenCanvas({
     charCountRef.current = content.length;
     setCharCount(content.length);
     debouncedSave(content);
-  }, []);
+
+    // Update caret after input (covers paste, etc.)
+    requestAnimationFrame(() => {
+      updateCaretPosition();
+    });
+  }, [updateCaretPosition]);
+
+  // --- Handle click to update caret position ---
+  const handleClick = useCallback(() => {
+    requestAnimationFrame(() => {
+      updateCaretPosition();
+      updateFocusParagraph();
+      updateCursorPan();
+    });
+  }, [updateCaretPosition, updateFocusParagraph, updateCursorPan]);
+
+  // --- #6 Kinetic Typography: WPM-based font weight ---
+  const dynamicFontWeight = Math.round(
+    400 + Math.min(currentWpm / 100, 1) * 200,
+  );
 
   // --- WPM-based caret intensity ---
   const caretIntensity = Math.min(currentWpm / 100, 1);
@@ -351,6 +532,9 @@ export default function ZenCanvas({
         }
       />
 
+      {/* #11 Smooth Caret — custom animated cursor */}
+      <div ref={caretRef} className="smooth-caret caret-idle" />
+
       {/* Startup overlay */}
       {!isInitialized && (
         <div className="zen-startup">
@@ -366,9 +550,11 @@ export default function ZenCanvas({
         spellCheck={false}
         onKeyDown={handleKeyDown}
         onInput={handleInput}
+        onClick={handleClick}
         style={
           {
             "--caret-intensity": caretIntensity,
+            "--dynamic-font-weight": dynamicFontWeight,
           } as React.CSSProperties
         }
         data-placeholder="ここに書き始める..."
