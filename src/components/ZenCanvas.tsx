@@ -272,6 +272,12 @@ export default function ZenCanvas({
     // Normal case: use getBoundingClientRect() which gives viewport coordinates
     // position: fixed + top: 0 + left: 0 means translate values = viewport coords
     caretRef.current.style.opacity = "1";
+    // Reset height to match the line height (may have been changed by empty-line fallback)
+    if (rect.height > 0) {
+      caretRef.current.style.height = `${rect.height}px`;
+    } else {
+      caretRef.current.style.height = "24px";
+    }
     caretRef.current.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
 
     // Reset caret idle animation
@@ -285,7 +291,9 @@ export default function ZenCanvas({
   }, []);
 
   // Keep ref in sync for IME composition handlers
-  updateCaretPositionRef.current = updateCaretPosition;
+  useEffect(() => {
+    updateCaretPositionRef.current = updateCaretPosition;
+  }, [updateCaretPosition]);
 
   // --- #8 Zen Focus Mode: Depth of Field ---
   const updateFocusParagraph = useCallback(() => {
@@ -416,7 +424,9 @@ export default function ZenCanvas({
   }, []);
 
   // Keep ref in sync for IME composition handlers
-  applyDynamicInkRef.current = applyDynamicInk;
+  useEffect(() => {
+    applyDynamicInkRef.current = applyDynamicInk;
+  }, [applyDynamicInk]);
 
   // --- #1 Update cursor pan position ---
   const updateCursorPan = useCallback(() => {
@@ -604,6 +614,30 @@ export default function ZenCanvas({
       updateCursorPan();
     });
   }, [updateCaretPosition, updateFocusParagraph, updateCursorPan]);
+
+  // --- Sync caret with browser selection at all times ---
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      // Only update if our editor is the active element
+      if (!editorRef.current) return;
+      const activeEl = document.activeElement;
+      if (
+        activeEl !== editorRef.current &&
+        !editorRef.current.contains(activeEl)
+      )
+        return;
+      if (isComposingRef.current) return;
+
+      requestAnimationFrame(() => {
+        updateCaretPosition();
+      });
+    };
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  }, [updateCaretPosition]);
 
   // --- #6 Kinetic Typography: WPM-based font weight ---
   const dynamicFontWeight = Math.round(
