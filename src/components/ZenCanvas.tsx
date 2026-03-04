@@ -89,7 +89,11 @@ export default function ZenCanvas({
       try {
         const content = await loadDocument();
         if (editorRef.current && content) {
-          editorRef.current.innerText = content;
+          // Wrap content in divs to ensure consistent DOM structure
+          const lines = content.split("\n");
+          editorRef.current.innerHTML = lines
+            .map((line) => `<div>${line || "<br>"}</div>`)
+            .join("");
           charCountRef.current = content.length;
           setCharCount(content.length);
         }
@@ -192,93 +196,86 @@ export default function ZenCanvas({
       return;
     }
 
+    // Strategy: try to find the cursor's line div and use it as reference
+    // This is more reliable than range.getBoundingClientRect() which can
+    // return wrong values at line boundaries
+    let lineNode: Node | null = range.startContainer;
+    if (lineNode.nodeType === Node.TEXT_NODE) {
+      lineNode = lineNode.parentNode;
+    }
+    while (lineNode && lineNode.parentNode !== editorRef.current) {
+      lineNode = lineNode.parentNode;
+    }
+
+    // Get the range rect (cursor position within the line)
     const rect = range.getBoundingClientRect();
 
-    // If rect is zero (e.g., empty line after Enter, empty editor)
-    if (
+    // Check if rect is valid (non-zero position)
+    const rectIsValid = !(
       rect.width === 0 &&
       rect.height === 0 &&
       rect.top === 0 &&
       rect.left === 0
-    ) {
-      // Try to find the container element to get its position
-      let containerNode: Node | null = range.startContainer;
+    );
 
-      // If we're in a text node, go up to the element
-      if (containerNode.nodeType === Node.TEXT_NODE) {
-        containerNode = containerNode.parentNode;
-      }
+    if (rectIsValid && rect.height > 0) {
+      // Valid rect — use its left position
+      // For top position, use the LINE NODE's top to avoid cross-line drift
+      let top = rect.top;
+      let height = rect.height;
 
-      // Walk up to find a block-level child of the editor
-      while (
-        containerNode &&
-        containerNode !== editorRef.current &&
-        containerNode.parentNode !== editorRef.current
-      ) {
-        containerNode = containerNode.parentNode;
-      }
-
-      // If we found a valid container element, use it
-      if (
-        containerNode &&
-        containerNode instanceof HTMLElement &&
-        containerNode !== editorRef.current
-      ) {
-        const containerRect = containerNode.getBoundingClientRect();
-        if (containerRect.height > 0) {
-          caretRef.current.style.opacity = "1";
-          caretRef.current.style.height = `${containerRect.height * 0.8}px`;
-          caretRef.current.style.transform = `translate(${containerRect.left}px, ${containerRect.top + containerRect.height * 0.1}px)`;
-          return;
+      if (lineNode && lineNode instanceof HTMLElement) {
+        const lineRect = lineNode.getBoundingClientRect();
+        // Use line's top + offset to keep caret within the correct line
+        const lineMiddle = lineRect.top + lineRect.height / 2;
+        const rectMiddle = rect.top + rect.height / 2;
+        // If caret midpoint is more than half a line away from line midpoint,
+        // snap to the line position (prevents cross-line drift)
+        if (Math.abs(rectMiddle - lineMiddle) > lineRect.height * 0.6) {
+          top = lineRect.top;
+          height = lineRect.height;
         }
       }
 
-      // If container element also has zero rect (truly empty), use a temporary
-      // zero-width space to measure the position
-      const tempSpan = document.createTextNode("\u200B");
-      range.insertNode(tempSpan);
-      const tempRange = document.createRange();
-      tempRange.selectNode(tempSpan);
-      const tempRect = tempRange.getBoundingClientRect();
-
-      if (tempRect.top !== 0 || tempRect.left !== 0) {
-        caretRef.current.style.opacity = "1";
-        caretRef.current.style.transform = `translate(${tempRect.left}px, ${tempRect.top}px)`;
-        // Clean up: remove temp node and restore selection
-        tempSpan.parentNode?.removeChild(tempSpan);
-        // Normalize to merge adjacent text nodes
-        editorRef.current.normalize();
-        // Restore selection position
-        selection.removeAllRanges();
-        selection.addRange(range);
-        return;
-      }
-
-      // Final cleanup if nothing worked
-      tempSpan.parentNode?.removeChild(tempSpan);
-      editorRef.current.normalize();
-
-      // Ultimate fallback: position at editor's padding-top area
-      const editorRect = editorRef.current.getBoundingClientRect();
-      const computedStyle = getComputedStyle(editorRef.current);
-      const paddingTop = parseFloat(computedStyle.paddingTop);
-      const paddingLeft = parseFloat(computedStyle.paddingLeft);
-
       caretRef.current.style.opacity = "1";
-      caretRef.current.style.transform = `translate(${editorRect.left + paddingLeft}px, ${editorRect.top + paddingTop - editorRef.current.scrollTop}px)`;
-      return;
-    }
-
-    // Normal case: use getBoundingClientRect() which gives viewport coordinates
-    // position: fixed + top: 0 + left: 0 means translate values = viewport coords
-    caretRef.current.style.opacity = "1";
-    // Reset height to match the line height (may have been changed by empty-line fallback)
-    if (rect.height > 0) {
-      caretRef.current.style.height = `${rect.height}px`;
+      caretRef.current.style.height = `${height}px`;
+      caretRef.current.style.transform = `translate(${rect.left}px, ${top}px)`;
+    } else if (
+      lineNode &&
+      lineNode instanceof HTMLElement &&
+      lineNode !== editorRef.current
+    ) {
+      // Zero rect but we have a line node — use its position (empty line)
+      const lineRect = lineNode.getBoundingClientRect();
+      if (lineRect.height > 0) {
+        caretRef.current.style.opacity = "1";
+        caretRef.current.style.height = `${lineRect.height}px`;
+        caretRef.current.style.transform = `translate(${lineRect.left}px, ${lineRect.top}px)`;
+      } else {
+        // Line exists but has no height — use temp measurement
+        const tempSpan = document.createTextNode("\u200B");
+        range.insertNode(tempSpan);
+        const tempRange = document.createRange();
+        tempRange.selectNode(tempSpan);
+        const tempRect = tempRange.getBoundingClientRect();
+        if (tempRect.top !== 0 || tempRect.left !== 0) {
+          caretRef.current.style.opacity = "1";
+          caretRef.current.style.height = `${tempRect.height || 24}px`;
+          caretRef.current.style.transform = `translate(${tempRect.left}px, ${tempRect.top}px)`;
+        }
+        tempSpan.parentNode?.removeChild(tempSpan);
+        editorRef.current.normalize();
+      }
     } else {
+      // Ultimate fallback: position at editor's content start
+      const editorRect = editorRef.current.getBoundingClientRect();
+      const cs = getComputedStyle(editorRef.current);
+      const pt = parseFloat(cs.paddingTop);
+      const pl = parseFloat(cs.paddingLeft);
+      caretRef.current.style.opacity = "1";
       caretRef.current.style.height = "24px";
+      caretRef.current.style.transform = `translate(${editorRect.left + pl}px, ${editorRect.top + pt - editorRef.current.scrollTop}px)`;
     }
-    caretRef.current.style.transform = `translate(${rect.left}px, ${rect.top}px)`;
 
     // Reset caret idle animation
     caretRef.current.classList.remove("caret-idle");
@@ -362,7 +359,8 @@ export default function ZenCanvas({
     const offset = rect.top - editorVisibleCenter;
 
     if (Math.abs(offset) > 30) {
-      editor.scrollBy({ top: offset, behavior: "smooth" });
+      // Use instant scroll to prevent async scroll desynchronizing with caret
+      editor.scrollBy({ top: offset, behavior: "instant" });
     }
   }, []);
 
@@ -370,20 +368,37 @@ export default function ZenCanvas({
   const applyMarkdownFormatting = useCallback(() => {
     if (!editorRef.current) return;
     const editor = editorRef.current;
-    const children = Array.from(editor.childNodes);
 
+    // Ensure first child is wrapped in a div (contentEditable quirk)
+    if (editor.firstChild && editor.firstChild.nodeType === Node.TEXT_NODE) {
+      const div = document.createElement("div");
+      div.textContent = editor.firstChild.textContent;
+      editor.replaceChild(div, editor.firstChild);
+      // Restore cursor to end of the new div
+      const sel = window.getSelection();
+      if (sel) {
+        const newRange = document.createRange();
+        newRange.selectNodeContents(div);
+        newRange.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+      }
+    }
+
+    const children = Array.from(editor.childNodes);
     children.forEach((child) => {
       if (!(child instanceof HTMLElement)) return;
       const text = child.textContent || "";
+      // Preserve existing non-markdown classes (like ink-fresh, ink-drying)
+      const mdClasses = ["md-h1", "md-h2", "md-h3"];
+      mdClasses.forEach((c) => child.classList.remove(c));
 
       if (text.startsWith("### ")) {
-        child.className = "md-h3";
+        child.classList.add("md-h3");
       } else if (text.startsWith("## ")) {
-        child.className = "md-h2";
+        child.classList.add("md-h2");
       } else if (text.startsWith("# ")) {
-        child.className = "md-h1";
-      } else {
-        child.className = "";
+        child.classList.add("md-h1");
       }
     });
   }, []);
@@ -540,7 +555,9 @@ export default function ZenCanvas({
       const isEnterKey = e.key === "Enter";
       const scheduleUpdate = (fn: () => void) => {
         if (isEnterKey) {
-          requestAnimationFrame(() => requestAnimationFrame(fn));
+          // Use setTimeout for Enter: rAF fires before scroll completes,
+          // causing stale coordinates. setTimeout guarantees DOM + scroll settle.
+          setTimeout(fn, 50);
         } else {
           requestAnimationFrame(fn);
         }
@@ -630,6 +647,7 @@ export default function ZenCanvas({
 
       requestAnimationFrame(() => {
         updateCaretPosition();
+        updateFocusParagraph();
       });
     };
 
@@ -637,7 +655,7 @@ export default function ZenCanvas({
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
     };
-  }, [updateCaretPosition]);
+  }, [updateCaretPosition, updateFocusParagraph]);
 
   // --- #6 Kinetic Typography: WPM-based font weight ---
   const dynamicFontWeight = Math.round(
@@ -691,7 +709,8 @@ export default function ZenCanvas({
       />
 
       {/* Character counter */}
-      <div className={`char-counter ${isIdle ? "" : "ghost-hidden"}`}>
+      {/* char-counter: visible when idle, hidden during typing (Ghost Mode) */}
+      <div className={`char-counter ${!isIdle ? "ghost-hidden" : ""}`}>
         {charCount.toLocaleString()}文字
       </div>
     </div>
