@@ -247,7 +247,9 @@ body::before {
 .zen-editor > * {
   transition:
     opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
-    filter 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    filter 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center center;
 }
 
 /* ============================================================
@@ -328,6 +330,8 @@ body::before {
 
 .zen-editor {
   animation: none;
+  perspective: 800px;
+  transform-style: preserve-3d;
 }
 
 /* Apply ink effect to newly typed characters via CSS */

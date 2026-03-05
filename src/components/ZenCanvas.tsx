@@ -292,7 +292,7 @@ export default function ZenCanvas({
     updateCaretPositionRef.current = updateCaretPosition;
   }, [updateCaretPosition]);
 
-  // --- #8 Zen Focus Mode: Depth of Field ---
+  // --- #8 Zen Focus Mode: Depth of Field + Z-axis depth ---
   const updateFocusParagraph = useCallback(() => {
     if (!editorRef.current || !focusModeEnabled) return;
 
@@ -313,11 +313,15 @@ export default function ZenCanvas({
     children.forEach((child) => {
       if (child instanceof HTMLElement) {
         if (child === currentNode) {
+          // Focused line: full clarity, at Z=0 (closest to viewer)
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
+          child.style.transform = "scale(1) translateZ(0px)";
         } else {
+          // Non-focused lines: recede into background (Z-axis depth)
           child.style.opacity = "0.55";
           child.style.filter = "blur(0.5px)";
+          child.style.transform = "scale(0.985) translateZ(-8px)";
         }
       }
     });
@@ -331,6 +335,7 @@ export default function ZenCanvas({
         if (child instanceof HTMLElement) {
           child.style.opacity = "1";
           child.style.filter = "blur(0px)";
+          child.style.transform = "scale(1) translateZ(0px)";
         }
       });
     }
