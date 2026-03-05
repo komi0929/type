@@ -758,12 +758,8 @@ body::before {
   user-select: none;
 }
 
-.char-counter:hover {
-  opacity: 0.7;
-}
-
 /* ============================================================
-   Deep Idle — 30s text fade (Transient Hypofrontality)
+   Deep Idle — 20s text fade (Transient Hypofrontality)
    Supports flow state by reducing self-awareness
    Enhanced: deeper fade with warmer color shift
    ============================================================ */

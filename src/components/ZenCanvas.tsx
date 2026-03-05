@@ -40,6 +40,7 @@ export default function ZenCanvas({
 
   // Milestone feedback: track last milestone for 500-char celebrations
   const lastMilestoneRef = useRef(0);
+  const milestoneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pulse Indicator: track rhythm stability
   const [pulseIntensity, setPulseIntensity] = useState(0);
@@ -445,6 +446,11 @@ export default function ZenCanvas({
         inkTimersRef.current.push(cleanTimer);
       }, 2000);
       inkTimersRef.current.push(timer);
+
+      // Prevent unbounded memory growth: trim completed timers
+      if (inkTimersRef.current.length > 50) {
+        inkTimersRef.current = inkTimersRef.current.slice(-20);
+      }
     }
   }, []);
 
@@ -571,8 +577,11 @@ export default function ZenCanvas({
         lastMilestoneRef.current = currentMilestone;
         if (caretRef.current) {
           caretRef.current.classList.add("caret-milestone");
-          setTimeout(() => {
+          if (milestoneTimerRef.current)
+            clearTimeout(milestoneTimerRef.current);
+          milestoneTimerRef.current = setTimeout(() => {
             caretRef.current?.classList.remove("caret-milestone");
+            milestoneTimerRef.current = null;
           }, 600);
         }
       }
@@ -612,6 +621,7 @@ export default function ZenCanvas({
 
       idleTimerRef.current = setTimeout(() => {
         setIsIdle(true);
+        setFlowIntensity(0); // Reset flow glow when idle
         onTypingStateChange?.(false);
         engineRef.current.fadeAmbientToSilence();
         setPulseIntensity(0);
@@ -750,7 +760,6 @@ export default function ZenCanvas({
           {
             "--caret-intensity": caretIntensity,
             "--dynamic-font-weight": dynamicFontWeight,
-            "--flow-intensity": flowIntensity,
           } as React.CSSProperties
         }
         data-placeholder="ここに書き始める..."
