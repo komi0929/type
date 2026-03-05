@@ -775,6 +775,18 @@ export class SoundEngine {
 
   startAmbient(): void {
     if (!this.ctx || !this.masterGain || !this.currentPreset?.ambient) return;
+
+    // If ambient was faded to silence, ramp it back up instead of creating new nodes
+    if (this.isAmbientPlaying && this.ambientGain) {
+      const targetGain = this.currentPreset.ambient.gain;
+      this.ambientGain.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.ambientGain.gain.linearRampToValueAtTime(
+        targetGain,
+        this.ctx.currentTime + 0.5,
+      );
+      return;
+    }
+
     if (this.isAmbientPlaying) return;
 
     const ambientConfig = this.currentPreset.ambient;
