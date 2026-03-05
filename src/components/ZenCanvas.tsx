@@ -229,10 +229,12 @@ export default function ZenCanvas({
       // Valid rect — use its left position
       // For top position, use the LINE NODE's top to avoid cross-line drift
       let top = rect.top;
-      let height = rect.height;
+      // Clamp height: rapid Enter can produce multi-line rects (height > 100px)
+      let height = Math.min(rect.height, 50);
 
       if (lineNode && lineNode instanceof HTMLElement) {
         const lineRect = lineNode.getBoundingClientRect();
+        height = Math.min(lineRect.height, 50);
         // Use line's top + offset to keep caret within the correct line
         const lineMiddle = lineRect.top + lineRect.height / 2;
         const rectMiddle = rect.top + rect.height / 2;
@@ -240,7 +242,6 @@ export default function ZenCanvas({
         // snap to the line position (prevents cross-line drift)
         if (Math.abs(rectMiddle - lineMiddle) > lineRect.height * 0.6) {
           top = lineRect.top;
-          height = lineRect.height;
         }
       }
 
@@ -714,6 +715,12 @@ export default function ZenCanvas({
             "--pulse-intensity": pulseIntensity,
           } as React.CSSProperties
         }
+      />
+
+      {/* Flow Glow — ambient vignette driven by --flow-intensity */}
+      <div
+        className="flow-glow"
+        style={{ "--flow-intensity": flowIntensity } as React.CSSProperties}
       />
 
       {/* #11 Smooth Caret — fixed-position animated cursor */}

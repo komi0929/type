@@ -639,8 +639,7 @@ body::before {
    maintains flow. Warm amber glow reduces cortisol (color psychology)
    ============================================================ */
 
-.zen-editor::before {
-  content: "";
+.flow-glow {
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -654,7 +653,7 @@ body::before {
   transition: opacity 2s ease;
 }
 
-:root[data-theme="light"] .zen-editor::before {
+:root[data-theme="light"] .flow-glow {
   opacity: calc(var(--flow-intensity, 0) * 0.06);
   background: radial-gradient(
     ellipse at 50% 100%,
