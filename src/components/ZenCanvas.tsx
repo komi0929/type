@@ -34,6 +34,13 @@ export default function ZenCanvas({
   const [charCount, setCharCount] = useState(0);
   const [currentWpm, setCurrentWpm] = useState(0);
 
+  // Flow state intensity (0-1): derived from WPM for ambient glow
+  // Evidence: Csikszentmihalyi — immediate, non-intrusive feedback is a flow precondition
+  const [flowIntensity, setFlowIntensity] = useState(0);
+
+  // Milestone feedback: track last milestone for 500-char celebrations
+  const lastMilestoneRef = useRef(0);
+
   // Pulse Indicator: track rhythm stability
   const [pulseIntensity, setPulseIntensity] = useState(0);
   const intervalHistoryRef = useRef<number[]>([]);
@@ -551,6 +558,24 @@ export default function ZenCanvas({
       const stability = calculateRhythmStability();
       setPulseIntensity(stability);
 
+      // Update Flow Intensity (sigmoid mapping of WPM to 0-1)
+      // Evidence: flow emerges at ~50 WPM, full zone at ~100 WPM
+      const flowSigmoid = 1 / (1 + Math.exp(-0.08 * (wpm - 50)));
+      setFlowIntensity(flowSigmoid);
+
+      // Milestone feedback: every 500 chars, pulse the caret
+      // Evidence: Csikszentmihalyi — clear progress feedback maintains flow
+      const currentMilestone = Math.floor(charCountRef.current / 500);
+      if (currentMilestone > lastMilestoneRef.current && currentMilestone > 0) {
+        lastMilestoneRef.current = currentMilestone;
+        if (caretRef.current) {
+          caretRef.current.classList.add("caret-milestone");
+          setTimeout(() => {
+            caretRef.current?.classList.remove("caret-milestone");
+          }, 600);
+        }
+      }
+
       // Update all visual effects after DOM updates
       // For Enter key, use double requestAnimationFrame because contentEditable
       // needs an extra frame to finish creating the new block element
@@ -592,9 +617,11 @@ export default function ZenCanvas({
         intervalHistoryRef.current = [];
       }, 3000);
 
+      // Evidence: Transient Hypofrontality research — faster visual elimination
+      // promotes prefrontal cortex deactivation and deeper flow
       deepIdleTimerRef.current = setTimeout(() => {
         setIsDeepIdle(true);
-      }, 30000);
+      }, 20000);
     },
     [
       onCommandPalette,
@@ -667,6 +694,13 @@ export default function ZenCanvas({
   // --- WPM-based caret intensity ---
   const caretIntensity = Math.min(currentWpm / 100, 1);
 
+  // --- Caret transition speed: adapts to typing speed ---
+  // Evidence: pseudo-haptic feedback (NIH) — visual response speed
+  // creates perceived tactile sensation. Fast typing = snappy response.
+  const caretTransitionMs = Math.round(
+    180 - Math.min(currentWpm / 100, 1) * 120,
+  );
+
   return (
     <div
       className={`zen-canvas ${isIdle ? "zen-idle" : "zen-active"} ${isDeepIdle ? "zen-deep-idle" : ""}`}
@@ -683,7 +717,11 @@ export default function ZenCanvas({
       />
 
       {/* #11 Smooth Caret — fixed-position animated cursor */}
-      <div ref={caretRef} className="smooth-caret caret-idle" />
+      <div
+        ref={caretRef}
+        className="smooth-caret caret-idle"
+        style={{ transitionDuration: `${caretTransitionMs}ms` }}
+      />
 
       {/* Startup overlay */}
       {!isInitialized && (
@@ -705,6 +743,7 @@ export default function ZenCanvas({
           {
             "--caret-intensity": caretIntensity,
             "--dynamic-font-weight": dynamicFontWeight,
+            "--flow-intensity": flowIntensity,
           } as React.CSSProperties
         }
         data-placeholder="ここに書き始める..."
