@@ -4,11 +4,7 @@ export type PresetId =
   | "zen-drops"
   | "mode-c"
   | "cafe"
-  | "asmr"
-  | "void"
-  | "forest-temple"
-  | "deep-ocean"
-  | "aurora";
+  | "asmr";
 
 export interface PresetConfig {
   id: PresetId;
@@ -45,8 +41,9 @@ export interface PresetConfig {
 }
 
 export const PRESETS: PresetConfig[] = [
-  // === 既存プリセット ===
   {
+    // Deep Thock — 極上のメカニカルキーボード音
+    // 低めのbandpassで厚みのあるthock感。ambient無しで純粋な打鍵音に集中。
     id: "deep-thock",
     name: "Deep Thock",
     description: "極上のメカニカルキーボード音",
@@ -66,33 +63,37 @@ export const PRESETS: PresetConfig[] = [
     ambient: null,
   },
   {
+    // Midnight Rain — 森の雨音に包まれて書く
+    // ← forest-templeの特徴を統合: triangle波の木の響き + brownノイズ
     id: "midnight-rain",
     name: "Midnight Rain",
-    description: "静かな雨音に包まれて書く",
+    description: "雨音と木霊に包まれて書く",
     emoji: "🌧️",
     keystroke: {
       filterType: "highpass",
       filterFreq: 2000,
       filterQ: 1.5,
-      attackMs: 1,
-      decayMs: 120,
-      pitchBase: 3000,
-      pitchRandomRange: 1500,
+      attackMs: 2,
+      decayMs: 150,
+      pitchBase: 2500,
+      pitchRandomRange: 1200,
       noiseGain: 0.25,
-      toneGain: 0.15,
-      toneType: "sine",
+      toneGain: 0.2,
+      toneType: "triangle",
     },
     ambient: {
       type: "brown",
       gain: 0.15,
-      filterFreq: 800,
+      filterFreq: 1200,
       filterType: "lowpass",
     },
   },
   {
+    // Zen Drops — 水滴の響き + オーロラのきらめき
+    // ← auroraの特徴を統合: WPM連動drive + 高い倍音のきらめき
     id: "zen-drops",
     name: "Zen Drops",
-    description: "水滴の響き — α波(10Hz)で創造性を引き出す",
+    description: "水滴の響き — α波(10Hz)+WPM連動で覚醒",
     emoji: "💧",
     keystroke: {
       filterType: "bandpass",
@@ -101,7 +102,7 @@ export const PRESETS: PresetConfig[] = [
       attackMs: 1,
       decayMs: 300,
       pitchBase: 800,
-      pitchRandomRange: 400,
+      pitchRandomRange: 500,
       noiseGain: 0.08,
       toneGain: 0.4,
       toneType: "sine",
@@ -112,8 +113,17 @@ export const PRESETS: PresetConfig[] = [
       binauralBase: 220,
       binauralBeat: 10,
     },
+    drive: {
+      enabled: true,
+      pitchScaleMin: 0.7,
+      pitchScaleMax: 1.8,
+      ambientGainMin: 0.03,
+      ambientGainMax: 0.09,
+    },
   },
   {
+    // Mode C — γ波(40Hz)集中モード
+    // WPM連動でキー音もambientも加速。集中力を極限まで高める。
     id: "mode-c",
     name: "Mode C",
     description: "γ波(40Hz)集中 — WPM連動コンボ・ドライブ",
@@ -145,6 +155,8 @@ export const PRESETS: PresetConfig[] = [
     },
   },
   {
+    // Café — カフェの雑踏の中、キーボードを叩く
+    // pink noiseで人々のざわめきを表現。warm系bandpass。
     id: "cafe",
     name: "Café",
     description: "カフェの雑踏とキーボード音",
@@ -169,6 +181,8 @@ export const PRESETS: PresetConfig[] = [
     },
   },
   {
+    // ASMR — 焚き火の音とトリガーサウンド
+    // crackle bufferで焚き火の独特な質感を再現。高域中心の繊細な音。
     id: "asmr",
     name: "ASMR",
     description: "焚き火の音とトリガーサウンド",
@@ -188,121 +202,6 @@ export const PRESETS: PresetConfig[] = [
     ambient: {
       type: "crackle",
       gain: 0.18,
-    },
-  },
-
-  // === 没入感プリセット ===
-
-  {
-    // Void — 虚空の中でタイプする感覚。極低音のドローンに沈み込み、
-    // キーストロークが暗い空間に反響するような深い残響。
-    id: "void",
-    name: "Void",
-    description: "虚空に沈み込む極低音ドローン",
-    emoji: "🕳️",
-    keystroke: {
-      filterType: "lowpass",
-      filterFreq: 200,
-      filterQ: 4,
-      attackMs: 5,
-      decayMs: 500,
-      pitchBase: 60,
-      pitchRandomRange: 10,
-      noiseGain: 0.15,
-      toneGain: 0.5,
-      toneType: "sine",
-    },
-    ambient: {
-      type: "brown",
-      gain: 0.2,
-      filterFreq: 150,
-      filterType: "lowpass",
-    },
-  },
-  {
-    // Forest Temple — 森の奥の神殿。鳥の声のような高い倍音と
-    // 風のようなpinkノイズ。キーストロークは木の床を叩くような音。
-    id: "forest-temple",
-    name: "Forest Temple",
-    description: "森の神殿で書く — 風と木霊",
-    emoji: "🌿",
-    keystroke: {
-      filterType: "bandpass",
-      filterFreq: 600,
-      filterQ: 1.5,
-      attackMs: 3,
-      decayMs: 250,
-      pitchBase: 400,
-      pitchRandomRange: 200,
-      noiseGain: 0.3,
-      toneGain: 0.25,
-      toneType: "triangle",
-    },
-    ambient: {
-      type: "pink",
-      gain: 0.1,
-      filterFreq: 3000,
-      filterType: "lowpass",
-    },
-  },
-  {
-    // Deep Ocean — 深海の静寂。水中にいるような低くこもった音。
-    // バイノーラルビートでシータ波(4Hz)を誘導し深い集中状態へ。
-    id: "deep-ocean",
-    name: "Deep Ocean",
-    description: "深海の静寂 — θ波(4Hz)で深いリラックスへ",
-    emoji: "🫧",
-    keystroke: {
-      filterType: "lowpass",
-      filterFreq: 400,
-      filterQ: 2,
-      attackMs: 4,
-      decayMs: 400,
-      pitchBase: 120,
-      pitchRandomRange: 40,
-      noiseGain: 0.2,
-      toneGain: 0.35,
-      toneType: "sine",
-    },
-    ambient: {
-      type: "binaural",
-      gain: 0.05,
-      binauralBase: 180,
-      binauralBeat: 4,
-    },
-  },
-  {
-    // Aurora — オーロラの下でタイプする幻想的な体験。
-    // WPM連動で音が変化し、速く打つほど光が増すイメージ。
-    // 高い倍音のきらめきと、ゆっくり揺れるバイノーラルビート。
-    id: "aurora",
-    name: "Aurora",
-    description: "オーロラの揺らぎ — α波(10Hz)+WPM連動",
-    emoji: "🌌",
-    keystroke: {
-      filterType: "highpass",
-      filterFreq: 1500,
-      filterQ: 1,
-      attackMs: 2,
-      decayMs: 350,
-      pitchBase: 1200,
-      pitchRandomRange: 800,
-      noiseGain: 0.1,
-      toneGain: 0.3,
-      toneType: "sine",
-    },
-    ambient: {
-      type: "binaural",
-      gain: 0.03,
-      binauralBase: 280,
-      binauralBeat: 10,
-    },
-    drive: {
-      enabled: true,
-      pitchScaleMin: 0.6,
-      pitchScaleMax: 2.0,
-      ambientGainMin: 0.02,
-      ambientGainMax: 0.08,
     },
   },
 ];
